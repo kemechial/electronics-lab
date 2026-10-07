@@ -2,6 +2,7 @@
  * Experiment 1: RC step response on a WeAct Black Pill (STM32F401CCU6, 84 MHz).
  *
  * Every CYCLE_PERIOD_MS:
+ *   -  measure VDDA from VREFINT (factory calibration), used for all mV conversions
  *   a. PB0 LOW for DISCHARGE_MS (full discharge)
  *   b. PB0 HIGH, capture N_SAMPLES charge samples (TIM2 TRGO -> ADC1, exact spacing)
  *   c. hold HIGH, then PB0 LOW and capture the discharge curve the same way
@@ -12,6 +13,7 @@
  */
 #include <stdint.h>
 #include "stm32f4xx_hal.h"
+#include "stm32f4xx_ll_adc.h"   /* VREFINT_CAL_ADDR, VREFINT_CAL_VREF */
 #include "config.h"
 
 #if HSE_VALUE != 25000000U
@@ -22,8 +24,19 @@
 volatile uint32_t tau_measured_us;
 volatile uint32_t tau_discharge_us;
 
+/* Capture-start diagnostics, filled by capture(). */
+typedef struct {
+    uint32_t pre_edge_sum;      /* sum of PRE_EDGE_AVG_N node conversions right before the edge */
+    uint32_t start_delay_cyc;   /* CPU cycles from PB0 edge to end of the first conversion */
+} capture_diag_t;
+
 static uint16_t charge_buf[N_SAMPLES];
 static uint16_t discharge_buf[N_SAMPLES];
+static capture_diag_t charge_diag;
+static capture_diag_t discharge_diag;
+
+/* VDDA used for every counts -> mV conversion: VREFINT measurement, or VDDA_MV fallback. */
+static uint32_t vdda_mv = VDDA_MV;
 
 static ADC_HandleTypeDef hadc1;
 static TIM_HandleTypeDef htim2;
@@ -174,24 +187,98 @@ static void TIM2_Init(void)
     }
 }
 
-/* Drive PB0 to `level` and capture N_SAMPLES conversions, sample k at t = k * SAMPLE_PERIOD_US. */
-static void capture(uint16_t *buf, GPIO_PinState level)
+/* DWT cycle counter: free-running at SYSCLK, used for capture-start timing. */
+static void DWT_Init(void)
 {
-    uint32_t i;
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+static void adc_select_channel(uint32_t channel)
+{
+    ADC_ChannelConfTypeDef ch = {0};
+
+    ch.Channel = channel;
+    ch.Rank = 1;
+    ch.SamplingTime = ADC_SAMPLETIME_480CYCLES;
+    if (HAL_ADC_ConfigChannel(&hadc1, &ch) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+static uint16_t adc_wait_sample(void)
+{
+    if (HAL_ADC_PollForConversion(&hadc1, 10) != HAL_OK) {
+        Error_Handler();
+    }
+    return (uint16_t)HAL_ADC_GetValue(&hadc1);
+}
+
+/* Sum of n back-to-back conversions, each triggered immediately by a TIM2 update (UG).
+ * ADC must be started and TIM2 running; the counter restarts at every UG, so the
+ * regular 1 ms trigger never fires in between (each conversion takes ~23.4 us). */
+static uint32_t adc_burst_sum(uint32_t n)
+{
+    uint32_t sum = 0;
+
+    while (n-- > 0) {
+        TIM2->EGR = TIM_EGR_UG;
+        sum += adc_wait_sample();
+    }
+    return sum;
+}
+
+/*
+ * VDDA from the internal reference: VDDA = VREFINT_CAL * VREFINT_CAL_VREF / VREFINT_data
+ * (same formula as __LL_ADC_CALC_VREFANALOG_VOLTAGE, applied to the average of
+ * VREFINT_AVG_N conversions for sub-count resolution). Returns 0 if out of range.
+ */
+static uint32_t measure_vdda_mv(void)
+{
+    const uint32_t cal = *VREFINT_CAL_ADDR;
+    uint32_t sum, mv;
+
+    adc_select_channel(ADC_CHANNEL_VREFINT);        /* also sets TSVREFE */
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) {
+        Error_Handler();
+    }
+    TIM2->CR1 |= TIM_CR1_CEN;
+    (void)adc_burst_sum(1);                         /* discard: VREFINT settling after TSVREFE */
+    sum = adc_burst_sum(VREFINT_AVG_N);
+    TIM2->CR1 &= ~TIM_CR1_CEN;
+    HAL_ADC_Stop(&hadc1);
+    adc_select_channel(SENSE_CHANNEL);
+
+    if (sum == 0) {
+        return 0;
+    }
+    mv = (cal * VREFINT_CAL_VREF * VREFINT_AVG_N + sum / 2) / sum;
+    return (mv >= VDDA_VALID_MIN_MV && mv <= VDDA_VALID_MAX_MV) ? mv : 0;
+}
+
+/* Drive PB0 to `level` and capture N_SAMPLES conversions, sample k at t = k * SAMPLE_PERIOD_US. */
+static void capture(uint16_t *buf, GPIO_PinState level, capture_diag_t *diag)
+{
+    uint32_t i, t_edge;
 
     if (HAL_ADC_Start(&hadc1) != HAL_OK) {          /* ADON, armed for TIM2 TRGO */
         Error_Handler();
     }
+    TIM2->CR1 |= TIM_CR1_CEN;
+
+    /* node voltage right before the edge (~PRE_EDGE_AVG_N * 23.4 us window) */
+    diag->pre_edge_sum = adc_burst_sum(PRE_EDGE_AVG_N);
 
     HAL_GPIO_WritePin(STEP_PORT, STEP_PIN, level);  /* the step: t = 0 */
-    TIM2->CR1 |= TIM_CR1_CEN;
+    t_edge = DWT->CYCCNT;
     TIM2->EGR = TIM_EGR_UG;                         /* counter = 0 + immediate TRGO: sample 0 at t = 0 */
 
     for (i = 0; i < N_SAMPLES; i++) {
-        if (HAL_ADC_PollForConversion(&hadc1, 10) != HAL_OK) {
-            Error_Handler();
+        buf[i] = adc_wait_sample();
+        if (i == 0) {
+            diag->start_delay_cyc = DWT->CYCCNT - t_edge;
         }
-        buf[i] = (uint16_t)HAL_ADC_GetValue(&hadc1);
         if ((i % BLINK_EVERY_N) == 0) {
             HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
         }
@@ -204,7 +291,7 @@ static void capture(uint16_t *buf, GPIO_PinState level)
 
 static uint32_t counts_to_mv(uint32_t counts)
 {
-    return (counts * VDDA_MV + ADC_FULL_SCALE / 2) / ADC_FULL_SCALE;
+    return (counts * vdda_mv + ADC_FULL_SCALE / 2) / ADC_FULL_SCALE;
 }
 
 /* Mean of the last SETTLE_AVG_N samples, in counts. */
@@ -319,6 +406,24 @@ static void print_curve(const char *phase, const uint16_t *buf)
     }
 }
 
+/* "# <phase>: pre_edge=<mV> start_delay=<us>"
+ * start_delay = PB0 edge -> first conversion read (EOC). It includes the 480-cycle
+ * sampling window + 12-cycle conversion (23.4 us at 21 MHz) and the poll latency. */
+static void print_diag(const char *phase, const capture_diag_t *diag)
+{
+    const uint32_t cyc_per_us = SystemCoreClock / 1000000U;
+
+    tx_str("# ");
+    tx_str(phase);
+    tx_str(": pre_edge=");
+    tx_u32((diag->pre_edge_sum * vdda_mv + ADC_FULL_SCALE * PRE_EDGE_AVG_N / 2) /
+           (ADC_FULL_SCALE * PRE_EDGE_AVG_N));
+    tx_str(" mV start_delay=");
+    tx_u32((diag->start_delay_cyc + cyc_per_us / 2) / cyc_per_us);
+    tx_str(" us");
+    tx_line();
+}
+
 static void print_summary(const char *phase, uint32_t v0, uint32_t vf, uint32_t tau_us)
 {
     tx_str("# ");
@@ -354,6 +459,7 @@ int main(void)
 #endif
     ADC1_Init();
     TIM2_Init();
+    DWT_Init();
 
     tx_str("# exp01_rc_step SYSCLK=");
     tx_u32(HAL_RCC_GetSysClockFreq());
@@ -370,20 +476,40 @@ int main(void)
 
     for (;;) {
         const uint32_t t_start = HAL_GetTick();
-        uint32_t c0, cf, d0, df;
+        uint32_t c0, cf, d0, df, vdda_meas;
 
         cycle++;
+
+        /* VDDA from VREFINT; VDDA_MV stays the fallback */
+        vdda_meas = measure_vdda_mv();
+        tx_str("# vdda: ");
+        if (vdda_meas != 0) {
+            vdda_mv = vdda_meas;
+            tx_u32(vdda_meas);
+            tx_str(" mV (constant: ");
+        } else {
+            vdda_mv = VDDA_MV;
+            tx_str("invalid (vrefint_cal=");
+            tx_u32(*VREFINT_CAL_ADDR);
+            tx_str("), using constant: ");
+        }
+        tx_u32(VDDA_MV);
+        tx_str(" mV");
+        if (vdda_meas != 0) {
+            tx_str(")");
+        }
+        tx_line();
 
         /* a. full discharge */
         HAL_GPIO_WritePin(STEP_PORT, STEP_PIN, GPIO_PIN_RESET);
         HAL_Delay(DISCHARGE_MS);
 
         /* b. charge curve */
-        capture(charge_buf, GPIO_PIN_SET);
+        capture(charge_buf, GPIO_PIN_SET, &charge_diag);
 
         /* c. hold HIGH, then discharge curve */
         HAL_Delay(HOLD_HIGH_MS);
-        capture(discharge_buf, GPIO_PIN_RESET);
+        capture(discharge_buf, GPIO_PIN_RESET, &discharge_diag);
 
         c0 = charge_buf[0];
         cf = final_counts(charge_buf);
@@ -398,7 +524,9 @@ int main(void)
         tx_line();
         tx_str("phase,t_us,adc_counts,mv");
         tx_line();
+        print_diag("charge", &charge_diag);
         print_curve("charge", charge_buf);
+        print_diag("discharge", &discharge_diag);
         print_curve("discharge", discharge_buf);
 
         /* e. summary */

@@ -14,7 +14,7 @@
 /* --- Component values (calculated vs measured: docs/exp01-rc-step/README.md) --- */
 #define R_NOMINAL_OHM       9830UL      /* measured with DMM */
 #define C_NOMINAL_NF        10460UL     /* measured: 10.46 uF */
-#define VDDA_MV             3266UL      /* measured at the 3V3 pin */
+#define VDDA_MV             3266UL      /* measured at the 3V3 pin; fallback if VREFINT measurement is invalid */
 
 /* Expected tau = R * C. Ohm * nF = ns; /1000 (rounded) = us.
  * 9830 * 10460 = 102,821,800 ns -> 102,822 us (fits in uint32). */
@@ -34,6 +34,10 @@
 
 /* --- ADC --- */
 #define ADC_FULL_SCALE      4095UL
+#define VREFINT_AVG_N       16U         /* VREFINT conversions averaged per cycle for VDDA */
+#define VDDA_VALID_MIN_MV   1700UL      /* F401 VDDA operating range; outside -> use VDDA_MV */
+#define VDDA_VALID_MAX_MV   3600UL
+#define PRE_EDGE_AVG_N      4U          /* node conversions averaged right before each PB0 edge */
 
 /* --- Pins --- */
 #define STEP_PORT           GPIOB
