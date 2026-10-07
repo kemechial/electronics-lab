@@ -27,7 +27,9 @@
 #define TAU_STEP_PERMILLE   632         /* 63.2 % of the step (charge: 63.2 %, discharge: 36.8 %) */
 
 /* --- Sequence timing --- */
-#define DISCHARGE_MS        3000UL      /* PB0 LOW before charge: ~29 tau */
+#define PRECONDITION_MV          20UL       /* node must be below this before the charge step */
+#define PRECONDITION_TIMEOUT_MS  10000UL    /* give up and skip the cycle after this */
+#define PRECONDITION_POLL_MS     50UL       /* node read interval while waiting */
 #define HOLD_HIGH_MS        500UL       /* PB0 held HIGH between charge and discharge capture */
 #define CYCLE_PERIOD_MS     10000UL     /* one full sequence every 10 s */
 #define BLINK_EVERY_N       50U         /* toggle PC13 every 50 samples during capture */

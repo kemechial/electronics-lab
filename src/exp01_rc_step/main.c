@@ -3,7 +3,8 @@
  *
  * Every CYCLE_PERIOD_MS:
  *   -  measure VDDA from VREFINT (factory calibration), used for all mV conversions
- *   a. PB0 LOW for DISCHARGE_MS (full discharge)
+ *   a. PB0 LOW until the node reads < PRECONDITION_MV (every PRECONDITION_POLL_MS);
+ *      on PRECONDITION_TIMEOUT_MS the cycle is skipped and retried next cycle
  *   b. PB0 HIGH, capture N_SAMPLES charge samples (TIM2 TRGO -> ADC1, exact spacing)
  *   c. hold HIGH, then PB0 LOW and capture the discharge curve the same way
  *   d. print both curves as CSV (phase,t_us,adc_counts,mv) — only after capture
@@ -294,6 +295,50 @@ static uint32_t counts_to_mv(uint32_t counts)
     return (counts * vdda_mv + ADC_FULL_SCALE / 2) / ADC_FULL_SCALE;
 }
 
+/* Mean of n conversions (given as their sum) in mV. */
+static uint32_t sum_to_mv(uint32_t sum, uint32_t n)
+{
+    return (sum * vdda_mv + ADC_FULL_SCALE * n / 2) / (ADC_FULL_SCALE * n);
+}
+
+/* Node voltage now: mean of PRE_EDGE_AVG_N back-to-back conversions, in mV. */
+static uint32_t read_node_mv(void)
+{
+    uint32_t sum;
+
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) {
+        Error_Handler();
+    }
+    TIM2->CR1 |= TIM_CR1_CEN;
+    sum = adc_burst_sum(PRE_EDGE_AVG_N);
+    TIM2->CR1 &= ~TIM_CR1_CEN;
+    HAL_ADC_Stop(&hadc1);
+    return sum_to_mv(sum, PRE_EDGE_AVG_N);
+}
+
+/*
+ * Drive PB0 LOW and read the node every PRECONDITION_POLL_MS (first read at once)
+ * until it is below PRECONDITION_MV. Returns 1 = OK, 0 = timeout; the last
+ * reading and the time since PB0 went LOW are returned through the pointers.
+ */
+static int precondition(uint32_t *node_mv, uint32_t *elapsed_ms)
+{
+    const uint32_t t0 = HAL_GetTick();
+
+    HAL_GPIO_WritePin(STEP_PORT, STEP_PIN, GPIO_PIN_RESET);
+    for (;;) {
+        *node_mv = read_node_mv();
+        *elapsed_ms = HAL_GetTick() - t0;
+        if (*node_mv < PRECONDITION_MV) {
+            return 1;
+        }
+        if (*elapsed_ms >= PRECONDITION_TIMEOUT_MS) {
+            return 0;
+        }
+        HAL_Delay(PRECONDITION_POLL_MS);
+    }
+}
+
 /* Mean of the last SETTLE_AVG_N samples, in counts. */
 static uint32_t final_counts(const uint16_t *buf)
 {
@@ -416,8 +461,7 @@ static void print_diag(const char *phase, const capture_diag_t *diag)
     tx_str("# ");
     tx_str(phase);
     tx_str(": pre_edge=");
-    tx_u32((diag->pre_edge_sum * vdda_mv + ADC_FULL_SCALE * PRE_EDGE_AVG_N / 2) /
-           (ADC_FULL_SCALE * PRE_EDGE_AVG_N));
+    tx_u32(sum_to_mv(diag->pre_edge_sum, PRE_EDGE_AVG_N));
     tx_str(" mV start_delay=");
     tx_u32((diag->start_delay_cyc + cyc_per_us / 2) / cyc_per_us);
     tx_str(" us");
@@ -445,6 +489,41 @@ static void print_summary(const char *phase, uint32_t v0, uint32_t vf, uint32_t 
     tx_fix2(deviation_x100(tau_us));
     tx_str(" %");
     tx_line();
+}
+
+/* Steps b-e: charge and discharge capture, tau from raw counts, CSV + summary. */
+static void run_measurement(uint32_t cycle)
+{
+    uint32_t c0, cf, d0, df;
+
+    /* b. charge curve */
+    capture(charge_buf, GPIO_PIN_SET, &charge_diag);
+
+    /* c. hold HIGH, then discharge curve */
+    HAL_Delay(HOLD_HIGH_MS);
+    capture(discharge_buf, GPIO_PIN_RESET, &discharge_diag);
+
+    c0 = charge_buf[0];
+    cf = final_counts(charge_buf);
+    d0 = discharge_buf[0];
+    df = final_counts(discharge_buf);
+    tau_measured_us = tau_from_curve(charge_buf, (int32_t)c0, (int32_t)cf);
+    tau_discharge_us = tau_from_curve(discharge_buf, (int32_t)d0, (int32_t)df);
+
+    /* d. curves, only after capture is finished */
+    tx_str("# cycle ");
+    tx_u32(cycle);
+    tx_line();
+    tx_str("phase,t_us,adc_counts,mv");
+    tx_line();
+    print_diag("charge", &charge_diag);
+    print_curve("charge", charge_buf);
+    print_diag("discharge", &discharge_diag);
+    print_curve("discharge", discharge_buf);
+
+    /* e. summary */
+    print_summary("charge", c0, cf, tau_measured_us);
+    print_summary("discharge", d0, df, tau_discharge_us);
 }
 
 int main(void)
@@ -476,7 +555,8 @@ int main(void)
 
     for (;;) {
         const uint32_t t_start = HAL_GetTick();
-        uint32_t c0, cf, d0, df, vdda_meas;
+        uint32_t vdda_meas, pre_mv, pre_ms;
+        int pre_ok;
 
         cycle++;
 
@@ -500,38 +580,18 @@ int main(void)
         }
         tx_line();
 
-        /* a. full discharge */
-        HAL_GPIO_WritePin(STEP_PORT, STEP_PIN, GPIO_PIN_RESET);
-        HAL_Delay(DISCHARGE_MS);
-
-        /* b. charge curve */
-        capture(charge_buf, GPIO_PIN_SET, &charge_diag);
-
-        /* c. hold HIGH, then discharge curve */
-        HAL_Delay(HOLD_HIGH_MS);
-        capture(discharge_buf, GPIO_PIN_RESET, &discharge_diag);
-
-        c0 = charge_buf[0];
-        cf = final_counts(charge_buf);
-        d0 = discharge_buf[0];
-        df = final_counts(discharge_buf);
-        tau_measured_us = tau_from_curve(charge_buf, (int32_t)c0, (int32_t)cf);
-        tau_discharge_us = tau_from_curve(discharge_buf, (int32_t)d0, (int32_t)df);
-
-        /* d. curves, only after capture is finished */
-        tx_str("# cycle ");
-        tx_u32(cycle);
+        /* a. verified precondition: node discharged below PRECONDITION_MV */
+        pre_ok = precondition(&pre_mv, &pre_ms);
+        tx_str("# precondition: node=");
+        tx_u32(pre_mv);
+        tx_str(" mV after ");
+        tx_u32(pre_ms);
+        tx_str(pre_ok ? " ms OK" : " ms TIMEOUT");
         tx_line();
-        tx_str("phase,t_us,adc_counts,mv");
-        tx_line();
-        print_diag("charge", &charge_diag);
-        print_curve("charge", charge_buf);
-        print_diag("discharge", &discharge_diag);
-        print_curve("discharge", discharge_buf);
 
-        /* e. summary */
-        print_summary("charge", c0, cf, tau_measured_us);
-        print_summary("discharge", d0, df, tau_discharge_us);
+        if (pre_ok) {
+            run_measurement(cycle);
+        }   /* TIMEOUT: skip this cycle, retry in the next one */
 
         while (HAL_GetTick() - t_start < CYCLE_PERIOD_MS) {
         }

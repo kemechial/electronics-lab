@@ -6,6 +6,7 @@ Flash/RAM after every successful release build (`pio run`). RAM = `.data` + `.bs
 |------|-----|--------|-----------|---------|--------|
 | 2026-10-07 | exp01_rc_step | First build: RC step, measured R = 9830 Ω, C = 10460 nF, VDDA = 3266 mV, N_SAMPLES = 800, DEBUG_ENABLED = 1 | 7,480 | 3,568 | < 20 KB / < 16 KB ✅ |
 | 2026-10-07 | exp01_rc_step | VDDA from VREFINT each cycle (VDDA_MV fallback); capture-start diagnostics: pre-edge node voltage, edge-to-first-sample delay (DWT) | 8,116 (+636) | 3,588 (+20) | < 20 KB / < 16 KB ✅ |
+| 2026-10-07 | exp01_rc_step | Verified precondition replaces fixed 3 s discharge (node < 20 mV, 50 ms poll, 10 s timeout skips cycle) | 8,336 (+220) | 3,588 (+0) | < 20 KB / < 16 KB ✅ |
 
 ### 2026-10-07 exp01_rc_step: top 10 symbols (baseline)
 
@@ -40,3 +41,12 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Observation:** not yet run on hardware.
 - **Expected:** start_delay ≈ 23 to 24 µs (480 + 12 ADC cycles at 21 MHz = 23.4 µs, plus poll latency). The sample itself is held about 0.6 µs before EOC. If charge pre_edge ≈ 17 mV, the node was not at 0 V before the edge, so the 17 mV is not a timing effect.
 - **Next step:** flash, capture a log, compare `# vdda` with the DMM reading at the 3V3 pin, then the DC calibration test.
+
+## 2026-10-07 exp01_rc_step: verified discharge precondition
+
+- **Hypothesis:** the fixed 3 s discharge does not prove the capacitor is empty (charge V_0 was 17 mV in the first run). Checking the node voltage before every charge step makes the starting condition explicit and logged.
+- **Change:** `DISCHARGE_MS` is removed. Before each charge, PB0 is driven LOW and the node is read at once and then every `PRECONDITION_POLL_MS` (50 ms), each read averaging 4 conversions in mV with the measured VDDA. It stops when the node is below `PRECONDITION_MV` (20 mV) or after `PRECONDITION_TIMEOUT_MS` (10000 ms). One line per cycle: `# precondition: node=<mV> mV after <ms> ms OK|TIMEOUT`. On TIMEOUT the cycle is skipped and retried in the next cycle. Steps b–e moved into `run_measurement()`, unchanged. Runtime VDDA (requested again this session) was already in place from the previous entry; τ is still computed from raw counts.
+- **Size:** release build 8,336 B flash (+220), 3,588 B RAM (+0). Top 10 unchanged except `main` 1,260 → 1,428 B; no optimisation proposed.
+- **Observation:** not yet run on hardware.
+- **Expected:** the previous cycle's discharge capture, printing and idle time leave PB0 LOW for about 5 to 6 s before the next precondition. If the tail settles at 6 to 10 mV as in the first run, the precondition should usually pass on the first read (`after 0 ms OK`). The LOW time before the charge step is now about 3 s shorter than before. TIMEOUT would mean the node stays at 20 mV or more, which points at H3/H4/H5.
+- **Next step:** flash, capture a log, check the precondition lines and the charge pre_edge/V_0 together.
