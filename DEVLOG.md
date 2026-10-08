@@ -60,3 +60,14 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Size:** release build 7,444 B flash, 692 B RAM. CLAUDE.md sets no budget for exp02 (the 20 KB / 16 KB budget is for exp01). Top 10: main 1,144, HAL_RCC_OscConfig 854, dht11_poll 760, __udivmoddi4 716, HAL_GPIO_Init 436, g_pfnVectors 404, HAL_RCC_ClockConfig 308, HAL_TIM_IC_ConfigChannel 294, dht11_init 232, s_t (.bss) 200. No optimisation proposed.
 - **Observation:** not yet run on hardware. Python port of the decoder on 3,000 synthetic frames (jitter ±6 µs, 16-bit wrap, release edge present or absent, 10 % corrupted checksums): 0 failures.
 - **Next step:** measure the pull-up with the DMM, flash, capture the first-read timing and edge dump, fill in the timing table and the reference comparison.
+
+## 2026-10-08 exp02_dht11: hardware results, supply and reference tests (documentation only)
+
+- **Hypothesis:** the TIM3 capture decoder reads the DHT11 reliably. The 3.3 V supply doesn't change the RH reading. The sensor agrees with a reference instrument within ±5 %RH (DHT p.3).
+- **Change:** documentation only (docs/exp02-dht11/README.md, this entry). No firmware change, so no new size entry.
+- **Observation (protocol):** several hundred reads with `crc_err=0`, `timeout=0`. Checksum verified by hand on sample frames. thr = 47 µs, w1 = 68–71 µs (datasheet 70 µs, DHT p.7–8), w0 = 21–26 µs (datasheet 26–28 µs).
+- **Observation (supply, sensor 1):** 34 % at 3.3 V; 36 % from the 5V pin with USB-C only; 34 % from the 5V pin with the ST-Link back-feeding it (about 3.26 V measured).
+- **Observation (reference):** reference 23 °C / 49 %RH. Sensor 1 34–36 %. Sensor 2 20–21 % (T 25 then 24 °C), marked suspect. Magnus calc: vapour pressure 13.7 hPa (reference) vs 9.5–10.1 hPa (sensor 1, at 23 °C assumed) vs 6.0–6.6 hPa (sensor 2).
+- **Incident:** momentary short while probing the 5V pin with the ST-Link supplying the board. The ST-Link re-enumerated on USB, and a following upload was verified OK. No overvoltage was possible, because the ST-Link was the only supply and the 5V pin was at about 3.26 V.
+- **Conclusion:** the protocol works. w0 is shorter than the datasheet value, cause untested (sensor spread or pull-up rise time). A supply effect on RH is not established: 2 %RH is about twice the ±1 %RH repeatability (DHT p.4), from one sensor and a few readings. Both sensors read far below the reference, but the reference accuracy is unknown. Sensor offsets, reference offset, microclimate and slow equilibration are all untested.
+- **Next step:** 1 h side-by-side time series; saturated salt test; logic analyzer capture of DATA; pull-up test with 2.2 kΩ and 10 kΩ; measure the pull-up with the DMM.
