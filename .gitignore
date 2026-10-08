@@ -3,3 +3,7 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Vendor documents: not redistributed, see docs/ref/INDEX.md
+docs/ref/*.pdf
+docs/ref/*.PDF
