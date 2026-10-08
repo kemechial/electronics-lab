@@ -7,6 +7,7 @@ Flash/RAM after every successful release build (`pio run`). RAM = `.data` + `.bs
 | 2026-10-07 | exp01_rc_step | First build: RC step, measured R = 9830 Ω, C = 10460 nF, VDDA = 3266 mV, N_SAMPLES = 800, DEBUG_ENABLED = 1 | 7,480 | 3,568 | < 20 KB / < 16 KB ✅ |
 | 2026-10-07 | exp01_rc_step | VDDA from VREFINT each cycle (VDDA_MV fallback); capture-start diagnostics: pre-edge node voltage, edge-to-first-sample delay (DWT) | 8,116 (+636) | 3,588 (+20) | < 20 KB / < 16 KB ✅ |
 | 2026-10-07 | exp01_rc_step | Verified precondition replaces fixed 3 s discharge (node < 20 mV, 50 ms poll, 10 s timeout skips cycle) | 8,336 (+220) | 3,588 (+0) | < 20 KB / < 16 KB ✅ |
+| 2026-10-08 | exp02_dht11 | New experiment: DHT11 on PA6, TIM3 both-edge input capture (IRQ), derived bit threshold | 7,444 | 692 | no budget set for exp02 |
 
 ### 2026-10-07 exp01_rc_step: top 10 symbols (baseline)
 
@@ -50,3 +51,12 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Observation:** not yet run on hardware.
 - **Expected:** the previous cycle's discharge capture, printing and idle time leave PB0 LOW for about 5 to 6 s before the next precondition. If the tail settles at 6 to 10 mV as in the first run, the precondition should usually pass on the first read (`after 0 ms OK`). The LOW time before the charge step is now about 3 s shorter than before. TIMEOUT would mean the node stays at 20 mV or more, which points at H3/H4/H5.
 - **Next step:** flash, capture a log, check the precondition lines and the charge pre_edge/V_0 together.
+
+## 2026-10-08 exp02_dht11: new experiment, DHT11 with TIM3 input capture
+
+- **Hypothesis:** a DHT11 can be read without blocking: open-drain start pulse, TIM3_CH1 capture of both edges at 1 µs per tick, interrupt per edge, decode after the frame. The 0/1 threshold can come from each frame's own widths instead of a constant.
+- **Documents read first:** DHT p.3–8 (text, plus Fig. 3/4/5 from images extracted from the PDF), DS p.26 Table 4 and p.44 Table 9, RM p.95, 154, 333, 364, 367. What was not read or not verified is listed in docs/exp02-dht11/README.md.
+- **Change:** new env `exp02_dht11` and `src/exp02_dht11/` (config.h, dht11.c/.h, main.c, stm32f4xx_it.c). exp01 untouched; its release build is still 8,336 B flash / 3,588 B RAM.
+- **Size:** release build 7,444 B flash, 692 B RAM. CLAUDE.md sets no budget for exp02 (the 20 KB / 16 KB budget is for exp01). Top 10: main 1,144, HAL_RCC_OscConfig 854, dht11_poll 760, __udivmoddi4 716, HAL_GPIO_Init 436, g_pfnVectors 404, HAL_RCC_ClockConfig 308, HAL_TIM_IC_ConfigChannel 294, dht11_init 232, s_t (.bss) 200. No optimisation proposed.
+- **Observation:** not yet run on hardware. Python port of the decoder on 3,000 synthetic frames (jitter ±6 µs, 16-bit wrap, release edge present or absent, 10 % corrupted checksums): 0 failures.
+- **Next step:** measure the pull-up with the DMM, flash, capture the first-read timing and edge dump, fill in the timing table and the reference comparison.
