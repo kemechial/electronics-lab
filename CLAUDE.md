@@ -41,6 +41,32 @@ These rules were first written for a Blue Pill (STM32F103) and apply to every ST
   - Budget for exp01: **< 20 KB flash, < 16 KB RAM**.
   - Before proposing any size optimisation, report the top 10 largest symbols (`arm-none-eabi-nm --size-sort -r -S .pio/build/<env>/firmware.elf | head -10`).
 
+## Operating model
+
+### Roles
+
+- **User:** the physical side and safety (wiring, power, probes, motors, flashing), the acceptance decision, and the sanity check of numbers.
+- **Claude:** reading the documents, writing code, running instruments, analysis, documentation and commits.
+
+### Trust levels
+
+| Level | Applies to | Rule |
+|-------|------------|------|
+| 1 | First use of a new tool or method | One independent verification, then record in HARDWARE_NOTES.md or the experiment README that it was done. |
+| 2 | Routine repeat of a tool or method already verified at level 1 | Do not stop for confirmation; report and continue. |
+| 3 | New wiring, external supply, motors or inductive loads, flashing, anything public (e.g. `git push`, publishing) | Always wait for the user's approval. |
+
+### Stop and ask when
+
+- Two sources disagree.
+- A number looks implausible.
+- Something needs a system change (PATH, drivers, registry).
+- A conclusion relies on an assumption that cannot be verified from `docs/ref`.
+
+### Report format after each task
+
+At most 10 lines: what was done; what was measured, with evidence file paths; what is calc; what is assumption; what the user must do physically. No long explanations unless the user asks.
+
 ## Debug session notes (Blue Pill PC13 blink, from stm32-experiments)
 
 - What was tried first: reviewed `HAL_Init()`/`SystemClock_Config()` ordering, GPIO clock enable ordering, and active-low pin logic — all were already correct, so none of these were the actual bug.
