@@ -42,6 +42,7 @@ Used by exp06 onward where stated; taken from `C:\Projects\stm32-experiments\CLA
 - Clock: **HSE 8 MHz** (`HSE_VALUE 8000000U` in the F1 HAL config) → PLL ×9 = **72 MHz**; APB1 /2 = 36 MHz, APB2 /1; `FLASH_LATENCY_2`. Never leave it on HSI.
 - PC13 LED is active-low; PC13–PC15 can only sink/source ±3 mA (DS5319 p.64).
 - Every experiment needs its own `stm32f1xx_it.c` with `SysTick_Handler` calling `HAL_IncTick()`.
+- exp06 transistor: Diotec 2N2222A, TO-92, pin order **1 = E, 2 = B, 3 = C** (Diotec p.1), not the onsemi P2N2222A order (1 = C, 3 = E). Orientation verified with a multimeter (β 223, reversed 13).
 
 ## Experiment rules
 

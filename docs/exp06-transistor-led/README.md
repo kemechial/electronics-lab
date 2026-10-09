@@ -2,64 +2,60 @@
 
 Firmware: [src/exp06_transistor_led/](../../src/exp06_transistor_led/) · PlatformIO env: `exp06_transistor_led` · Board: STM32F103C8T6 Blue Pill (clone), 72 MHz from the 8 MHz crystal.
 
-Sources (see [docs/ref/INDEX.md](../ref/INDEX.md)): DS5319 Rev 20 (STM32F103x8/xB datasheet), RM0008 Rev 21, Diotec 2N2222A (`2n2222a.pdf`, Version 2026-03-10). The onsemi P2N2222A datasheet is **not** in docs/ref.
+Sources (see [docs/ref/INDEX.md](../ref/INDEX.md)): Diotec 2N2222A (`2n2222a.pdf`, TO-92, Version 2026-03-10, the datasheet for this part), DS5319 Rev 20 (STM32F103x8/xB), RM0008 Rev 21. onsemi P2N2222A: family reference only (different manufacturer, different pin order), not in docs/ref.
 
 ## Circuit
 
 ```
-3V3 ── R_LED 323.6 Ω ── LED anode ─|>|─ LED cathode ── C
-PB0 (push-pull) ── RB ─────────────────────────────── B    NPN "2222"
-GND ───────────────────────────────────────────────── E
+3V3 ── R_LED 323.6 Ω ── LED anode ─|>|─ LED cathode ── C (pin 3)
+PB0 (push-pull) ── RB ─────────────────────────────── B (pin 2)   Diotec 2N2222A
+GND ───────────────────────────────────────────────── E (pin 1)
 ```
 
 - **Firmware:** PB0 is HIGH for 2 s, then LOW for 2 s, timed with `HAL_GetTick` (no `HAL_Delay`). The PC13 on-board LED is on while PB0 is HIGH. There is no UART output, because the USART1 wiring isn't confirmed.
 - **PB0:** LQFP48 pin 18, I/O, **not 5 V tolerant (not FT)** (DS5319 Table 5, p.29). Alternate function TIM3_CH3; TIM3 remap in RM0008 Table 44, p.178.
 
-## Transistor
+## Transistor: Diotec 2N2222A
 
-The transistor is a **"2222" NPN. Its exact variant and pin order are still to be confirmed by the user.**
-
-| Item | Value | Source / status |
-|------|-------|-----------------|
-| Exact part (P2N2222A, 2N2222A, PN2222A, …) | | to be given by the user |
-| Pin order (pin 1, 2, 3) | | to be given by the user |
-| β (hFE), multimeter, correct orientation | **223** | measured (user) |
-| β, collector and emitter swapped | **13** | measured (user). Cause: pin order differs between 2222 variants (TO-92 C-B-E vs E-B-C), so a wrong-variant pinout swaps C and E |
-
-### Datasheet values: same family, not verified for this exact part
-
-| Parameter | Datasheet | Value | Status |
-|-----------|-----------|-------|--------|
-| Pin order | P2N2222A p.1 | — | same family, not verified for this exact part; datasheet not in docs/ref |
-| hFE | P2N2222A p.2 | — | same family, not verified for this exact part; datasheet not in docs/ref |
-| VCE(sat) | P2N2222A p.2 | — | same family, not verified for this exact part; datasheet not in docs/ref |
-| VBE(sat) | P2N2222A p.2 | — | same family, not verified for this exact part; datasheet not in docs/ref |
-| 10 mA readings | P2N2222A p.5, Fig. 11 | — | same family, not verified for this exact part; datasheet not in docs/ref |
-| hFE at IC = 10 mA, VCE = 10 V | Diotec 2N2222A p.2 | ≥ 75 | same family, not verified for this exact part |
-| hFE at IC = 150 mA, VCE = 10 V | Diotec 2N2222A p.2 | 100–300 | same family, not verified for this exact part |
-| VCE(sat) at IC = 150 mA, IB = 15 mA | Diotec 2N2222A p.1 | ≤ 0.3 V | same family, not verified for this exact part |
-| VCEO, IC max, Ptot | Diotec 2N2222A p.1 | 40 V, 600 mA, 625 mW | same family, not verified for this exact part |
+| Parameter | Value | Source |
+|-----------|-------|--------|
+| Pin order | **1 = E, 2 = B, 3 = C** | Diotec p.1 (symbol); orientation verified by the user with a multimeter |
+| β, multimeter, correct orientation | 223 | measured (user) |
+| β, collector and emitter reversed | 13 | measured (user) |
+| VCEO / VCBO / VEBO | 40 V / 75 V / 6 V | Diotec p.1 |
+| IC / ICM | 600 mA / 800 mA | Diotec p.1 |
+| Ptot | 625 mW | Diotec p.1 |
+| VCE(sat) | ≤ 0.3 V at IC = 150 mA, IB = 15 mA | Diotec p.1 |
+| hFE min, VCE = 10 V | 35 at 0.1 mA, 50 at 1 mA, 75 at 10 mA; 100–300 at 150 mA | Diotec p.2 |
+| RthJA | 200 K/W | Diotec p.2 |
+| VBE(sat), switching times | **not in this datasheet** | — |
+| VBE (on) | 0.7 V | **assumption**: onsemi P2N2222A Fig. 11, different manufacturer, family reference only; to be measured |
 
 ## Calculation
 
-| Quantity | Formula | Value | Status |
-|----------|---------|-------|--------|
-| LED current | I_LED = (V_3V3 − V_F − VCE(sat)) / 323.6 Ω | needs V_F and VCE(sat) | calc, pending measurement |
-| Base current | IB = (V_PB0,high − VBE) / RB | **1.2–2.6 mA** | user-given; RB not yet recorded |
-| PB0 drive check | IB vs normal drive ±8 mA (DS5319 Table 37, p.64) | 1.2–2.6 mA < 8 mA: OK | calc |
-| PB0 absolute maximum | IB vs IIO ±25 mA (DS5319 Tables 6–7, p.37) | well below 25 mA | calc |
-| PB0 voltage | PB0 is not FT (DS5319 Table 5, p.29) | keep the base circuit ≤ 3.3 V | datasheet |
-| Saturation margin | forced β = I_LED / IB vs measured β 223 | pending I_LED | calc, pending |
+LED current, as given: **I_LED ≈ 3.2–4.5 mA** with R_LED = 323.6 Ω, from I_LED = (V_3V3 − V_F − VCE(sat)) / R_LED. That is not 10 mA, so the 10 mA datasheet points don't apply directly.
+
+**calc:** base current IB = (3.3 V − 0.7 V) / RB (VBE assumed), forced β = I_LED / IB:
+
+| RB | IB | Forced β (I_LED 3.2–4.5 mA) | vs hFE min 50 at 1 mA (Diotec p.2) |
+|----|----|-----------------------------|-------------------------------------|
+| 1 kΩ | 2.60 mA | 1.2–1.7 | ≪ 50: saturated |
+| 2.2 kΩ | 1.18 mA | 2.7–3.8 | ≪ 50: saturated |
+| 4.7 kΩ | 0.55 mA | 5.8–8.1 | ≪ 50: saturated |
+
+All three RB values drive the transistor deep into saturation (forced β well below hFE min).
+
+**PB0 drive check (calc):** IB ≤ 2.6 mA is below the ±8 mA normal drive (DS5319 Table 37, p.64) and the ±25 mA absolute maximum (DS5319 Tables 6–7, p.37). PB0 is not FT (DS5319 p.29), so keep the base circuit at ≤ 3.3 V.
 
 ## Measurement (to fill)
 
 | Quantity | Calculated | Measured | Deviation |
 |----------|------------|----------|-----------|
 | V_3V3 | 3.3 V nominal | | |
-| RB | | | |
-| V_PB0 (HIGH) | | | |
-| VBE (on) | | | |
-| VCE (on) | | | |
-| Voltage across R_LED → I_LED | | | |
-| IB | 1.2–2.6 mA | | |
-| VCE (off) | ≈ V_3V3 − V_F(leakage) | | |
+| RB used | 1 k / 2.2 k / 4.7 kΩ | | |
+| V_PB0 (HIGH) | ≈ 3.3 V | | |
+| VBE (on) | 0.7 V (assumption) | | |
+| VCE (on) | ≤ 0.3 V | | |
+| Voltage across R_LED → I_LED | 3.2–4.5 mA | | |
+| IB = (V_PB0 − VBE) / RB | see table | | |
+| VCE (off) | ≈ V_3V3 − V_F | | |
