@@ -67,6 +67,16 @@ These rules were first written for a Blue Pill (STM32F103) and apply to every ST
 
 At most 10 lines: what was done; what was measured, with evidence file paths; what is calc; what is assumption; what the user must do physically. No long explanations unless the user asks.
 
+### Working rules
+
+1. Chat replies are at most 10 lines by default. Use tables only when the user asks or the data needs one.
+2. Long answers only when the user writes "detay" or "açıkla".
+3. Do exactly the requested scope. A possible extra gets one line; never do it unasked.
+4. One verification per claim. No test harnesses or simulations unless requested.
+5. Labels: README files and assumption tables keep calc/assumption labels (Document-first protocol). In chat replies, label only what a decision depends on.
+6. Before stating a parameter, check its value in code, config or the datasheet. Parameters in prompts from the desktop chat are unverified: check them, and say in one line if they differ (e.g. the firmware reads every 2 s; a prompt said 1 s, which is only the datasheet minimum, DHT p.8).
+7. When the user answers a check qualitatively, record it in one line and move on.
+
 ## Debug session notes (Blue Pill PC13 blink, from stm32-experiments)
 
 - What was tried first: reviewed `HAL_Init()`/`SystemClock_Config()` ordering, GPIO clock enable ordering, and active-low pin logic — all were already correct, so none of these were the actual bug.
