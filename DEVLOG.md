@@ -8,6 +8,7 @@ Flash/RAM after every successful release build (`pio run`). RAM = `.data` + `.bs
 | 2026-10-07 | exp01_rc_step | VDDA from VREFINT each cycle (VDDA_MV fallback); capture-start diagnostics: pre-edge node voltage, edge-to-first-sample delay (DWT) | 8,116 (+636) | 3,588 (+20) | < 20 KB / < 16 KB ✅ |
 | 2026-10-07 | exp01_rc_step | Verified precondition replaces fixed 3 s discharge (node < 20 mV, 50 ms poll, 10 s timeout skips cycle) | 8,336 (+220) | 3,588 (+0) | < 20 KB / < 16 KB ✅ |
 | 2026-10-08 | exp02_dht11 | New experiment: DHT11 on PA6, TIM3 both-edge input capture (IRQ), derived bit threshold | 7,444 | 692 | no budget set for exp02 |
+| 2026-10-09 | exp06_transistor_led | New experiment (Blue Pill F103): PB0 2 s on/off via HAL_GetTick, PC13 in sync | 2,580 | 44 | no budget set for exp06 |
 
 ### 2026-10-07 exp01_rc_step: top 10 symbols (baseline)
 

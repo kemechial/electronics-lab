@@ -33,6 +33,16 @@ These rules were first written for a Blue Pill (STM32F103) and apply to every ST
 - **PA0 is the user button (KEY) — do not use it for experiments.**
 - Debug UART: USART1 TX on PA9 (AF7), 115200 8N1.
 
+## Blue Pill (STM32F103C8T6, clone) specifics
+
+Used by exp06 onward where stated; taken from `C:\Projects\stm32-experiments\CLAUDE.md`. Do not apply Black Pill clock values or cite F401 documents for the F103 (F103 sources: DS5319, RM0008, see docs/ref/INDEX.md).
+
+- Board `bluepill_f103c8`, framework `stm32cube`, `upload_protocol = stlink`, `upload_flags = -c` / `set CPUTAPID 0` (clone, never remove).
+- `HAL_Init()` before `SystemClock_Config()`; enable each GPIO clock before configuring its pins.
+- Clock: **HSE 8 MHz** (`HSE_VALUE 8000000U` in the F1 HAL config) → PLL ×9 = **72 MHz**; APB1 /2 = 36 MHz, APB2 /1; `FLASH_LATENCY_2`. Never leave it on HSI.
+- PC13 LED is active-low; PC13–PC15 can only sink/source ±3 mA (DS5319 p.64).
+- Every experiment needs its own `stm32f1xx_it.c` with `SysTick_Handler` calling `HAL_IncTick()`.
+
 ## Experiment rules
 
 - **Every experiment records calculated versus measured values.** Component values are measured (DMM) where possible and marked "measured" in `config.h`; the README has a Calculation section (expected values from the measured components) and a Measurement section (results), plus the deviation and its cause.
