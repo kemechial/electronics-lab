@@ -71,3 +71,13 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Incident:** momentary short while probing the 5V pin with the ST-Link supplying the board. The ST-Link re-enumerated on USB, and a following upload was verified OK. No overvoltage was possible, because the ST-Link was the only supply and the 5V pin was at about 3.26 V.
 - **Conclusion:** the protocol works. w0 is shorter than the datasheet value, cause untested (sensor spread or pull-up rise time). A supply effect on RH is not established: 2 %RH is about twice the ±1 %RH repeatability (DHT p.4), from one sensor and a few readings. Both sensors read far below the reference, but the reference accuracy is unknown. Sensor offsets, reference offset, microclimate and slow equilibration are all untested.
 - **Next step:** 1 h side-by-side time series; saturated salt test; logic analyzer capture of DATA; pull-up test with 2.2 kΩ and 10 kΩ; measure the pull-up with the DMM.
+
+## 2026-10-09 exp02_dht11: first logic analyzer session (no firmware change)
+
+- **State:** board powered from the ST-Link only (no USB-C); DHT11 VDD on the 3V3 pin; 3V3 about 3.23 V (user, measured 2026-10-08 evening, not during the captures); sensor 2; Saleae clone (fx2lafw) on port 1 of the Realtek hub.
+- **Hypothesis:** an independent instrument confirms the firmware's TIM3 widths and decode, and shows whether w0 below 26–28 µs is a measurement artefact.
+- **Change:** `scripts/sigrok_cli.py` (tool lookup), `scripts/analyze_dht_edges.py`, `docs/ref/logic-analyzer.md`, `HARDWARE_NOTES.md` (channel map CH1 = D0 PA6, CH2 = D1 PA9), captures `docs/exp02-dht11/data/chancheck_all.sr` and `capture_001.sr`/`.vcd` (24 MHz, trigger D0 falling).
+- **Observation:** analyzer decode 15 00 17 00 2C, checksum OK, matches the firmware's `raw=` in the same capture. The UART decode was verified by the user in PulseView. w0 21.58–25.67 µs (27 of 30 at 24.1 µs; the last bit of bytes 1 and 3 is 25.6 µs, bit 39 is 21.6 µs); w1 71.83–71.87 µs; firmware in the same frame w0 21–26, w1 71–72. Release to response 12.5 µs (datasheet 20–40), response 84/88 µs (80/80), bit-start low 55.1 µs (50).
+- **Conclusion:** the firmware and the analyzer agree to within 1 µs; both differ from the datasheet. The w0 spread depends on bit position. Rise time alone does not explain the pattern (calc); the cause is untested.
+- **Issues:** the analyzer enumerates only on some hub ports. The 1.2 s channel check caught a read by chance, because the read period is 2 s (corrected in the README). `am230x` can't decode captures that start inside the start pulse.
+- **Next step:** step 7, the probe loading check (firmware w0/w1 with and without the clips); pull-up test with 2.2 kΩ/10 kΩ.

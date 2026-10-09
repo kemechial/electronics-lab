@@ -166,6 +166,21 @@ If all devices measure the same air, the vapour pressure e should be the same ev
 
 Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analyzer.md). Channel map: [HARDWARE_NOTES.md](../../HARDWARE_NOTES.md). Captures are in [data/](data/).
 
+### State during the captures (2026-10-09, user-reported)
+
+| Item | State |
+|------|-------|
+| Board power | ST-Link V2 only, no USB-C |
+| ST-Link | connected (SWD + power) |
+| DHT11 VDD | Black Pill 3V3 pin (no jumper; the 5V pin is not used) |
+| 3V3 rail | about 3.23 V, measured by the user on the evening of 2026-10-08, **not during these captures**; approximate |
+| Sensor | sensor 2 (the newer one) |
+| Analyzer | Saleae clone on port 1 of the Realtek USB 2.0 hub; CH1 = D0 on the PA6 row, CH2 = D1 on the PA9 row, GND on Black Pill GND |
+
+### Probe loading check (step 7): pending
+
+Still to do: compare the firmware's `w0`/`w1` ranges (serial monitor) with the analyzer clips attached and with all clips removed. Not measured yet.
+
 ### Channel check and UART validation (2026-10-09)
 
 - **Capture:** `data/chancheck_all.sr`: 1.2 s, 4 MHz, all 8 channels, untriggered, **both clips connected** (CH1 on the PA6 row, CH2 on the PA9 row). Sensor: **sensor 2** (the newer one), confirmed by the user.
