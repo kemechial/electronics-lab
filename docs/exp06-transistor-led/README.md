@@ -47,15 +47,25 @@ All three RB values drive the transistor deep into saturation (forced β well be
 
 **PB0 drive check (calc):** IB ≤ 2.6 mA is below the ±8 mA normal drive (DS5319 Table 37, p.64) and the ±25 mA absolute maximum (DS5319 Tables 6–7, p.37). PB0 is not FT (DS5319 p.29), so keep the base circuit at ≤ 3.3 V.
 
-## Measurement (to fill)
+## Measurement (2026-10-09, user, multimeter)
 
-| Quantity | Calculated | Measured | Deviation |
-|----------|------------|----------|-----------|
-| V_3V3 | 3.3 V nominal | | |
-| RB used | 1 k / 2.2 k / 4.7 kΩ | | |
-| V_PB0 (HIGH) | ≈ 3.3 V | | |
-| VBE (on) | 0.7 V (assumption) | | |
-| VCE (on) | ≤ 0.3 V | | |
-| Voltage across R_LED → I_LED | 3.2–4.5 mA | | |
-| IB = (V_PB0 − VBE) / RB | see table | | |
-| VCE (off) | ≈ V_3V3 − V_F | | |
+RB value: **<to be given by the user>**. Values marked "by subtraction" or "derived" still need a direct measurement.
+
+| Quantity | Calculated | Measured | Deviation / note |
+|----------|------------|----------|------------------|
+| V_3V3 (rail) | 3.3 V nominal | ≈ 3.26 V | −0.04 V |
+| R_LED | 323.6 Ω | 323.6 Ω (measured) | — |
+| LED voltage V_F | — | 1.9 V | — |
+| Voltage across R_LED | — | 1.3 V | — |
+| IC = I_LED = V_R_LED / R_LED | 3.2–4.5 mA | **4.0 mA** | inside the calculated range |
+| Voltage across RB | — | 2.52 V | — |
+| IB = V_RB / RB | 2.60 mA (1 kΩ) / 1.18 mA (2.2 kΩ) | 2.52 mA (1 kΩ) / 1.15 mA (2.2 kΩ) | −3 % (1 kΩ), −3 % (2.2 kΩ) |
+| VCE (on) | ≤ 0.3 V (Diotec p.1) | ≈ 0.06 V **by subtraction** (3.26 − 1.3 − 1.9) | to be measured directly |
+| VBE (on) | 0.7 V (assumption) | ≈ 0.78 V derived with PB0 = 3.3 V; ≈ 0.74 V with PB0 = 3.26 V (PB0 can't exceed the rail) | to be measured directly |
+| Forced β = IC / IB | 1.2–1.7 (1 kΩ) / 2.7–3.8 (2.2 kΩ) | **1.6** (1 kΩ) / **3.5** (2.2 kΩ) | inside the calculated ranges |
+
+## Findings
+
+- **Matches the calculation within meter resolution:** IC = 4.0 mA is inside the 3.2–4.5 mA range, IB is within 3 % of the calculation, and forced β is inside the calculated range for both RB values.
+- **The transistor is deeply saturated:** forced β 1.6 or 3.5 is far below hFE min 50 at 1 mA (Diotec p.2), and VCE(on) ≈ 0.06 V (by subtraction) is well below VCE(sat) max 0.3 V (Diotec p.1).
+- **Open:** the RB value; direct VCE and VBE measurements.
