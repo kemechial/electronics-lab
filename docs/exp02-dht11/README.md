@@ -162,6 +162,21 @@ If all devices measure the same air, the vapour pressure e should be the same ev
 3. **Logic analyzer capture** of the DATA line, to check the protocol timing (w0 below the datasheet value) independently of TIM3.
 4. **Pull-up test** with 2.2 kΩ and 10 kΩ, to check whether w0 changes with rise time (see Findings).
 
+## Logic analyzer
+
+Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analyzer.md). Channel map: [HARDWARE_NOTES.md](../../HARDWARE_NOTES.md). Captures are in [data/](data/).
+
+### Channel check and UART validation (2026-10-09)
+
+- **Capture:** `data/chancheck_all.sr`: 1.2 s, 4 MHz, all 8 channels, untriggered, **both clips connected** (CH1 on the PA6 row, CH2 on the PA9 row).
+- **Deviation from plan:** the plan was a separate 100 ms capture for each clip. With one read per second, a 100 ms window usually contains no activity. Sigrok can't trigger on "any channel", because multi-channel trigger conditions combine with AND, and the mapping was what we were testing. So one 1.2 s capture with both clips was used, and each channel was identified by its waveform.
+- **Result:**
+  - CH1 = **D0**: DHT11, with a 19,998 µs start pulse and 86 edges.
+  - CH2 = **D1**: UART, with a shortest pulse of 8.5 µs (1 bit = 8.68 µs at 115200).
+  - D2–D7: constant high.
+  - No cross-coupling between D0 and D1 was seen.
+- **UART validation:** the `uart` decoder on D1 (115200 8N1) gives the firmware line `T=23 C RH=21 % dec=0,0 raw=15,00,17,00,2C ok=114 crc_err=0 timeout=0 thr=48 w0=22-26us w1=71-72us`, with no decoder warnings. The user confirmed in PulseView that the decode matches.
+
 ## Findings
 
 1. **Protocol works:** several hundred reads with `crc_err=0` and `timeout=0`. Checksums were verified by hand on sample frames.
