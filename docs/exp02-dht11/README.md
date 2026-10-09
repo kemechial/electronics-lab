@@ -177,6 +177,58 @@ Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analy
   - No cross-coupling between D0 and D1 was seen.
 - **UART validation:** the `uart` decoder on D1 (115200 8N1) gives the firmware line `T=23 C RH=21 % dec=0,0 raw=15,00,17,00,2C ok=114 crc_err=0 timeout=0 thr=48 w0=22-26us w1=71-72us`, with no decoder warnings. The user confirmed in PulseView that the decode matches.
 
+### DHT11 capture `data/capture_001` (2026-10-09)
+
+**Capture settings:**
+- `-d fx2lafw -C D0,D1 -c samplerate=24000000 -t D0=f --time 60`, one shot.
+- Trigger on the falling edge of D0 (DHT DATA) only, which is the start of the MCU start pulse.
+- 24 MHz gives a 41.67 ns sample period. 48 MHz was not used: it is not validated.
+- The 60 ms window holds the start pulse (0–20 ms), the frame (20–23.9 ms) and the firmware UART line (30.1–38.7 ms).
+- Files: `capture_001.sr` (sigrok session) and `capture_001.vcd` (edge export; VCD is a supported output format, `sigrok-cli -L`).
+
+**Analysis:** `python scripts/analyze_dht_edges.py docs/exp02-dht11/data/capture_001.vcd`. The script parses the VCD, decodes the 40 bits with a threshold derived from the widths (47.98 µs), checks the checksum and compares the bytes with the firmware's `raw=` from the same capture. The `uart` decoder supplies the firmware line.
+- **Bytes:** 15 00 17 00 2C, checksum OK. **Computed from the bytes:** RH = 21 %, T = 23 °C, both decimal bytes 0.
+- **Firmware match:** the firmware line in the same capture is `raw=15,00,17,00,2C`, an exact match.
+- **am230x cross-check:** only the decoder's bit, byte and checksum annotations are used, not its T/RH values. It can't decode `capture_001`, because the capture starts inside the start pulse and the decoder needs the high idle before the start edge. On `chancheck_all.sr` (untriggered, with idle before the start), its bits, bytes (15 00 17 00 2C) and checksum (OK) match the script.
+
+| Phase | Datasheet | Logic analyzer (capture_001, 24 MHz) | Firmware TIM3 (same frame, UART line) |
+|-------|-----------|--------------------------------------|---------------------------------------|
+| Start low | ≥ 18 ms (DHT p.6) | 19,997.08 µs | — |
+| Release → response | 20–40 µs (DHT p.6) | **12.54 µs** | — |
+| Response low | 80 µs (DHT p.7) | 84.08 µs | — |
+| Response high | 80 µs (DHT p.7) | 88.12 µs | — |
+| Bit-start low | 50 µs (DHT p.7) | 55.08–55.13 µs | — |
+| High for "0" (w0) | 26–28 µs (DHT p.7) | 21.58–25.67 µs (n = 30) | 21–26 µs |
+| High for "1" (w1) | 70 µs (DHT p.8) | 71.83–71.87 µs (n = 10) | 71–72 µs |
+| Final low | 50 µs (DHT p.8) | 57.83 µs | — |
+| Threshold | — | 47.98 µs (two-means) | 48 µs |
+
+The 4 MHz channel-check capture gives the same values to within one sample (0.25 µs).
+
+### w0/w1: datasheet vs firmware vs logic analyzer
+
+- **Which two agree:** the **firmware and the logic analyzer agree** to within the firmware's 1 µs resolution on the same frame: w0 21–26 vs 21.58–25.67 µs, w1 71–72 vs 71.83–71.87 µs. **Neither agrees with the datasheet:** w0 is below 26–28 µs, and w1 is about 1.8 µs above 70 µs.
+- **Earlier serial-monitor ranges:** the earlier w1 = 68–71 µs came from another session. That session's RH readings (34–36 %) point to sensor 1, while this capture reads RH = 21 %, which points to sensor 2. The two ranges are therefore probably not from the same sensor. That is a hypothesis; the sensor was not recorded for the capture.
+- **Structure of w0:** 27 of the 30 "0" highs are 24.08–24.13 µs. The three exceptions are the last bit of byte 1 (bit 15: 25.62 µs), the last bit of byte 3 (bit 31: 25.67 µs) and the last bit of the frame (bit 39: 21.58 µs). Bytes 0 and 2 end in a "1" bit, so their last bit can't be compared. The w0 range therefore comes from bit position, not random spread. *Hypothesis, untested:* timing inside the sensor, between bytes and at the end of the frame.
+
+### Input thresholds and how they change a measured high width
+
+| Input | Rising-edge switch point | Falling-edge switch point | Source |
+|-------|--------------------------|---------------------------|--------|
+| STM32 PA6 (FT pin, DS p.39 Table 8) | VIH ≥ 0.7 VDD = 2.31 V | VIL ≤ 0.3 VDD = 0.99 V; hysteresis 10 % VDD typical | DS p.90, Table 54 |
+| Logic analyzer input | **unknown**, assumed about 1.4–1.65 V | same | **assumption**: no schematic or datasheet for this clone; FX2 LVTTL or HC-buffer inputs are typical |
+
+The sensor pulls DATA low through its open-drain output, so falling edges are fast. The pull-up raises the line along an RC curve, so a rising edge crosses a threshold V_th at t = τ · ln(VDD / (VDD − V_th)), with τ = R_pullup · C_bus. A measured high width runs from the rising crossing to the falling crossing. **A higher rising threshold therefore crosses later and shortens the measured high by that delay. It lengthens the measured low before it by the same amount.** The falling crossing hardly moves.
+
+**calc:** τ = 4.7 kΩ × C_bus, where C_bus is assumed:
+
+| C_bus | τ | Delay to 1.4 V | Delay to 2.31 V (0.7 VDD) | Difference |
+|-------|---|----------------|---------------------------|------------|
+| 100 pF | 0.47 µs | 0.26 µs | 0.57 µs | 0.31 µs |
+| 1 nF | 4.7 µs | 2.59 µs | 5.66 µs | 3.06 µs |
+
+A 1 µs difference between the two instruments would need about 330 pF. The firmware and the analyzer agree to within 1 µs, which is consistent with a small τ, but the analyzer threshold is not known. The rise-time mechanism also doesn't fit the pattern in the data. It would shorten every high pulse equally and lengthen the low before it, yet w1 is *above* the datasheet value while w0 is below it, and the per-position pattern isn't explained by rise time. Both sensors' timing may simply differ from the translated datasheet's nominal values. That is untested; the planned 2.2 kΩ/10 kΩ pull-up test would show any rise-time effect directly.
+
 ## Findings
 
 1. **Protocol works:** several hundred reads with `crc_err=0` and `timeout=0`. Checksums were verified by hand on sample frames.

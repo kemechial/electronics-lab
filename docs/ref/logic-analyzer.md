@@ -24,7 +24,7 @@ Every sigrok-cli option used in this repo is taken from the sources below, not f
 | Sample rates | 20 k, 25 k, 50 k, 100 k, 200 k, 250 k, 500 k, 1 M, 2 M, 3 M, 4 M, 6 M, 8 M, 12 M, 16 M, 24 M, 48 MHz | `--show` |
 | Triggers | `0` low, `1` high, `r` rising, `f` falling, `e` either edge | `--show` (letters); meanings per `--help` `-t/--triggers` (to confirm against the man page) |
 | Options | `continuous`, `limit_frames`, `limit_samples`, `conn`, `captureratio` | `--show` |
-| Input threshold | not given by `--show` | see the exp02 README; treated as an assumption unless documented |
+| Input threshold | **unknown**, assumed about 1.4–1.65 V | not given by `--show`, no schematic or datasheet for this clone; assumption (see the exp02 README) |
 
 ## Command-line options used
 
@@ -45,6 +45,18 @@ From `sigrok-cli --help`. The man page is not installed with the Windows build: 
 | `-i, --input-file` / `-I, --input-format` | Load input from file / input format |
 | `-P, --protocol-decoders` / `-A, --protocol-decoder-annotations` | Protocol decoders to run / annotations to show |
 | `-L, --list-supported` | List supported devices/modules/decoders |
+
+## Decoders used
+
+| Decoder | Options (from `-P <id> --show`) | Use |
+|---------|---------------------------------|-----|
+| `uart` | `tx=<ch>`, `baudrate` (default 115200), `data_bits` (8), `parity` (none), `stop_bits` (1.0); binary class `tx` (`-B uart=tx`) | decode USART1 TX |
+| `am230x` | `sda=<ch>`, `device` ('am230x/rht' or 'dht11'); annotation classes `bit`, `byte`, `checksum` (plus humidity/temperature, not used) | cross-check bits/bytes/checksum only. Needs the high idle before the start edge, so it can't decode a capture triggered on the start falling edge. Its docs recommend a sample rate of at least 200 kHz. |
+
+## Not verified
+
+- **`-c` syntax for more than one option** (for example `samplerate` together with `captureratio` for a pre-trigger): `--help` doesn't document it and it hasn't been tested. Captures so far use a single `-c samplerate=...`.
+- **48 MHz:** listed by `--show`, but not used or validated. 24 MHz is used for DHT captures.
 
 ## History
 
