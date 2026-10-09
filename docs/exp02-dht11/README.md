@@ -77,7 +77,7 @@ For each frame the firmware runs a two-means split on the 40 high widths. It sta
 
 ## Output
 
-One line per read:
+One line per read. **The line below is an invented example of the format, not a measurement**; real lines are under "Logic analyzer".
 
 ```
 T=24 C RH=45 % dec=3,0 raw=2D,00,18,03,48 ok=5 crc_err=0 timeout=1 thr=49 w0=24-28us w1=68-72us
@@ -168,8 +168,9 @@ Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analy
 
 ### Channel check and UART validation (2026-10-09)
 
-- **Capture:** `data/chancheck_all.sr`: 1.2 s, 4 MHz, all 8 channels, untriggered, **both clips connected** (CH1 on the PA6 row, CH2 on the PA9 row).
-- **Deviation from plan:** the plan was a separate 100 ms capture for each clip. With one read per second, a 100 ms window usually contains no activity. Sigrok can't trigger on "any channel", because multi-channel trigger conditions combine with AND, and the mapping was what we were testing. So one 1.2 s capture with both clips was used, and each channel was identified by its waveform.
+- **Capture:** `data/chancheck_all.sr`: 1.2 s, 4 MHz, all 8 channels, untriggered, **both clips connected** (CH1 on the PA6 row, CH2 on the PA9 row). Sensor: **sensor 2** (the newer one), confirmed by the user.
+- **Deviation from plan:** the plan was a separate 100 ms capture for each clip. The firmware reads **every 2 s** (`READ_PERIOD_MS` = 2000), so a 100 ms window usually contains no activity. Sigrok can't trigger on "any channel", because multi-channel trigger conditions combine with AND, and the mapping was what we were testing. So one 1.2 s capture with both clips was used, and each channel was identified by its waveform.
+- **Correction:** this was originally justified with "one read per second". With the real 2 s period, a 1.2 s untriggered window contains a complete read plus its UART line only about 60 % of the time, so this capture caught one **by chance**, not by design. The 2 s period is confirmed by the firmware's read counter: `ok=114` in this capture and `ok=806` in `capture_001` about 23 minutes later, which is 692 reads in about 1,380 s.
 - **Result:**
   - CH1 = **D0**: DHT11, with a 19,998 µs start pulse and 86 edges.
   - CH2 = **D1**: UART, with a shortest pulse of 8.5 µs (1 bit = 8.68 µs at 115200).
@@ -183,6 +184,7 @@ Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analy
 - `-d fx2lafw -C D0,D1 -c samplerate=24000000 -t D0=f --time 60`, one shot.
 - Trigger on the falling edge of D0 (DHT DATA) only, which is the start of the MCU start pulse.
 - 24 MHz gives a 41.67 ns sample period. 48 MHz was not used: it is not validated.
+- Sensor: **sensor 2** (the newer one), confirmed by the user.
 - The 60 ms window holds the start pulse (0–20 ms), the frame (20–23.9 ms) and the firmware UART line (30.1–38.7 ms).
 - Files: `capture_001.sr` (sigrok session) and `capture_001.vcd` (edge export; VCD is a supported output format, `sigrok-cli -L`).
 
@@ -208,7 +210,7 @@ The 4 MHz channel-check capture gives the same values to within one sample (0.25
 ### w0/w1: datasheet vs firmware vs logic analyzer
 
 - **Which two agree:** the **firmware and the logic analyzer agree** to within the firmware's 1 µs resolution on the same frame: w0 21–26 vs 21.58–25.67 µs, w1 71–72 vs 71.83–71.87 µs. **Neither agrees with the datasheet:** w0 is below 26–28 µs, and w1 is about 1.8 µs above 70 µs.
-- **Earlier serial-monitor ranges:** the earlier w1 = 68–71 µs came from another session. That session's RH readings (34–36 %) point to sensor 1, while this capture reads RH = 21 %, which points to sensor 2. The two ranges are therefore probably not from the same sensor. That is a hypothesis; the sensor was not recorded for the capture.
+- **Earlier serial-monitor ranges:** the earlier w1 = 68–71 µs came from another session. Both logic analyzer captures used **sensor 2** (the newer one, confirmed by the user; same temperature as before, lower RH). Which sensor produced the earlier 68–71 µs was not recorded, so whether the w1 difference is between sensors or between sessions is open.
 - **Structure of w0:** 27 of the 30 "0" highs are 24.08–24.13 µs. The three exceptions are the last bit of byte 1 (bit 15: 25.62 µs), the last bit of byte 3 (bit 31: 25.67 µs) and the last bit of the frame (bit 39: 21.58 µs). Bytes 0 and 2 end in a "1" bit, so their last bit can't be compared. The w0 range therefore comes from bit position, not random spread. *Hypothesis, untested:* timing inside the sensor, between bytes and at the end of the frame.
 
 ### Input thresholds and how they change a measured high width
