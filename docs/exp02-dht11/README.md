@@ -177,9 +177,9 @@ Tool, device and option sources: [docs/ref/logic-analyzer.md](../ref/logic-analy
 | Sensor | sensor 2 (the newer one) |
 | Analyzer | Saleae clone on port 1 of the Realtek USB 2.0 hub; CH1 = D0 on the PA6 row, CH2 = D1 on the PA9 row, GND on Black Pill GND |
 
-### Probe loading check (step 7): pending
+### Probe loading check (step 7)
 
-Still to do: compare the firmware's `w0`/`w1` ranges (serial monitor) with the analyzer clips attached and with all clips removed. Not measured yet.
+The user compared the firmware's `w0`/`w1` ranges on the serial monitor with the analyzer clips attached and with them removed: **"not much difference"** (2026-10-09). This is a qualitative, user-reported result; the ranges were not recorded. So probe loading has no visible effect at the firmware's 1 µs resolution, but it is not quantified. If needed later, log about 20 lines in each state to a file.
 
 ### Channel check and UART validation (2026-10-09)
 

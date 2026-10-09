@@ -80,4 +80,5 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Observation:** analyzer decode 15 00 17 00 2C, checksum OK, matches the firmware's `raw=` in the same capture. The UART decode was verified by the user in PulseView. w0 21.58–25.67 µs (27 of 30 at 24.1 µs; the last bit of bytes 1 and 3 is 25.6 µs, bit 39 is 21.6 µs); w1 71.83–71.87 µs; firmware in the same frame w0 21–26, w1 71–72. Release to response 12.5 µs (datasheet 20–40), response 84/88 µs (80/80), bit-start low 55.1 µs (50).
 - **Conclusion:** the firmware and the analyzer agree to within 1 µs; both differ from the datasheet. The w0 spread depends on bit position. Rise time alone does not explain the pattern (calc); the cause is untested.
 - **Issues:** the analyzer enumerates only on some hub ports. The 1.2 s channel check caught a read by chance, because the read period is 2 s (corrected in the README). `am230x` can't decode captures that start inside the start pulse.
-- **Next step:** step 7, the probe loading check (firmware w0/w1 with and without the clips); pull-up test with 2.2 kΩ/10 kΩ.
+- **Step 7 (probe loading):** user-reported "not much difference" in the firmware's w0/w1 with the clips on or off; qualitative, ranges not recorded.
+- **Next step:** pull-up test with 2.2 kΩ/10 kΩ; 1 h side-by-side time series; saturated salt test.
