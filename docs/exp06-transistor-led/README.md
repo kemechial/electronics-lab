@@ -29,7 +29,7 @@ GND ─────────────────────────�
 | hFE min, VCE = 10 V | 35 at 0.1 mA, 50 at 1 mA, 75 at 10 mA; 100–300 at 150 mA | Diotec p.2 |
 | RthJA | 200 K/W | Diotec p.2 |
 | VBE(sat), switching times | **not in this datasheet** | — |
-| VBE (on) | 0.7 V | **assumption**: onsemi P2N2222A Fig. 11, different manufacturer, family reference only; to be measured |
+| VBE (on) | ≈ 0.74 V (rail 3.26 V) to 0.78 V (rail 3.3 V) | **measured by subtraction** (V_PB0 − V_RB); to be measured directly (PB0 to GND, B to E). The earlier 0.7 V assumption (onsemi P2N2222A Fig. 11, family reference) is replaced |
 
 ## Calculation
 
@@ -49,7 +49,7 @@ All three RB values drive the transistor deep into saturation (forced β well be
 
 ## Measurement (2026-10-09, user, multimeter)
 
-RB value: **<to be given by the user>**. Values marked "by subtraction" or "derived" still need a direct measurement.
+RB = **2.186 kΩ** (measured). Values marked "by subtraction" still need a direct measurement.
 
 | Quantity | Calculated | Measured | Deviation / note |
 |----------|------------|----------|------------------|
@@ -57,15 +57,16 @@ RB value: **<to be given by the user>**. Values marked "by subtraction" or "deri
 | R_LED | 323.6 Ω | 323.6 Ω (measured) | — |
 | LED voltage V_F | — | 1.9 V | — |
 | Voltage across R_LED | — | 1.3 V | — |
-| IC = I_LED = V_R_LED / R_LED | 3.2–4.5 mA | **4.0 mA** | inside the calculated range |
+| IC = I_LED = V_R_LED / R_LED | 3.2–4.5 mA | 1.3 V / 323.6 Ω = **4.02 mA** | inside the calculated range |
 | Voltage across RB | — | 2.52 V | — |
-| IB = V_RB / RB | 2.60 mA (1 kΩ) / 1.18 mA (2.2 kΩ) | 2.52 mA (1 kΩ) / 1.15 mA (2.2 kΩ) | −3 % (1 kΩ), −3 % (2.2 kΩ) |
+| RB | 2.2 kΩ nominal | 2.186 kΩ | −0.6 % |
+| IB = V_RB / RB | (3.3 − 0.7) / 2.186 kΩ = 1.19 mA | 2.52 V / 2.186 kΩ = **1.15 mA** | −3 % |
 | VCE (on) | ≤ 0.3 V (Diotec p.1) | ≈ 0.06 V **by subtraction** (3.26 − 1.3 − 1.9) | to be measured directly |
-| VBE (on) | 0.7 V (assumption) | ≈ 0.78 V derived with PB0 = 3.3 V; ≈ 0.74 V with PB0 = 3.26 V (PB0 can't exceed the rail) | to be measured directly |
-| Forced β = IC / IB | 1.2–1.7 (1 kΩ) / 2.7–3.8 (2.2 kΩ) | **1.6** (1 kΩ) / **3.5** (2.2 kΩ) | inside the calculated ranges |
+| VBE (on) | — | ≈ 0.74 V (rail 3.26 V) to 0.78 V (rail 3.3 V), **measured by subtraction** | to be measured directly (PB0 to GND, B to E) |
+| Forced β = IC / IB | 2.7–3.8 (2.2 kΩ) | 4.02 / 1.15 = **3.5** | inside the calculated range |
 
 ## Findings
 
-- **Matches the calculation within meter resolution:** IC = 4.0 mA is inside the 3.2–4.5 mA range, IB is within 3 % of the calculation, and forced β is inside the calculated range for both RB values.
-- **The transistor is deeply saturated:** forced β 1.6 or 3.5 is far below hFE min 50 at 1 mA (Diotec p.2), and VCE(on) ≈ 0.06 V (by subtraction) is well below VCE(sat) max 0.3 V (Diotec p.1).
-- **Open:** the RB value; direct VCE and VBE measurements.
+- **Calculation and measurement agree:** IC = 4.02 mA is inside the calculated 3.2–4.5 mA, IB = 1.15 mA is 3 % below the calculated 1.19 mA, and forced β = 3.5 is inside the calculated 2.7–3.8.
+- **The transistor is deeply saturated:** forced β 3.5 against hFE min 50 at 1 mA (Diotec p.2).
+- **Open:** direct VCE and VBE measurements (PB0 to GND, B to E).
