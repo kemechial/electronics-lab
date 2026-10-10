@@ -32,3 +32,4 @@ How to find them:
 |------------|--------------------------|
 | exp02_dht11 | DHT pp.3–8; DS p.26 (Table 4), p.44 (Table 9); RM pp.95, 154, 333, 364, 367 |
 | exp06_transistor_led | DS5319: Table 5 p.29 (PB0 = LQFP48 pin 18, TIM3_CH3, I/O not FT), Tables 6–7 p.37 (absolute maximum, IIO ±25 mA), Table 37 p.64 (output voltage, ±8 mA, PC13–PC15 ±3 mA); RM0008 Table 44 p.178 (TIM3 remap); Q-2N2222A p.1 (pin order, limits, VCEsat), p.2 (hFE, RthJA); P2N2222A Fig. 11 as family reference for the VBE = 0.7 V assumption |
+| exp07a_led_pattern | DS5319 Table 5 p.29 (PB0 = TIM3_CH3); RM0008 p.94 (timer clock ×2 when APB prescaler ≠ 1), p.178 Table 44 (TIM3 remap), p.387 (PWM mode), p.416 (TIMx_CCMR2 OC3M/OC3PE) |
