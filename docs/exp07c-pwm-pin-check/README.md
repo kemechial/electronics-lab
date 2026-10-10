@@ -13,6 +13,15 @@ Test PB0 (TIM3_CH3) against PB6 (TIM4_CH1) on a chip known to be a **genuine ST*
 - PC13 on-board LED blinks at 1 Hz as a heartbeat. No UART output.
 - Sources in code comments: DS5319 Table 5 p.29 (PB0) and p.32 (PB6); RM0008 Tables 43–44 p.178, p.387 (PWM mode), Tables 20–21 p.161 (pin modes), p.94 (timer clock).
 
+## Builds
+
+| Env | Board | Pins |
+|-----|-------|------|
+| `exp07c_pwm_pin_check` | `bluepill_f103c8` (medium-density, 64 KB / 20 KB) | PB0 = TIM3_CH3, PB6 = TIM4_CH1 |
+| `exp07c_c6` | `bluepill_f103c6` (low-density, 32 KB / 10 KB) | PB0 = TIM3_CH3 (DocID15060 Table 5 p.27), PA1 = TIM2_CH2 (DocID15060 Table 5 p.26; RM0008 Table 45 p.179). The low-density parts have no TIM4 (DocID15060 pp.18–19), so PA1 replaces PB6 as the reference. |
+
+The C8 build flashed onto the C6 board crashed before the PWM started (timer registers 0): its RAM layout needs 20 KB, and the C6 has 10 KB (DocID15060 Table 2, p.11).
+
 ## Expected (calc)
 
 | Quantity | Expected |
@@ -28,10 +37,16 @@ Test PB0 (TIM3_CH3) against PB6 (TIM4_CH1) on a chip known to be a **genuine ST*
 
 | Chip | CPUID | DEV_ID | Pin | Measured Hz | Measured duty | DC average | GPIOB_CRL raw | State line |
 |------|-------|--------|-----|-------------|---------------|------------|---------------|------------|
-| Genuine ST (to fill) | | | PB0 | | | | | |
-| Genuine ST (to fill) | | | PB6 | | | | | |
+| STM32F103C6, r1p1 core (genuine per CPUID) | 0x411FC231 | 0x412 (low-density) | PB0 (TIM3_CH3) | not measured (DC meter only) | 65 % implied by DC (calc) | **2.154 V** | 0x4448444A (PB0 = 0xA) | env `exp07c_c6`, 2026-10-10; PC13 blinking; power source not recorded |
+| same | 0x411FC231 | 0x412 | PA1 (TIM2_CH2, reference) | not measured | 65 % implied (calc) | **2.154 V** | GPIOA_CRL 0x444444A4 (PA1 = 0xA) | same |
 
 Reference: **clones (CPUID 0x412FC230, r2p0): no PWM on PB0 on two chips, see the [exp07a README](../exp07a-led-pattern/README.md); not re-measured here.**
+
+Register check (OpenOCD, read-only): TIM3 and TIM2 counting (CR1 = 0x81), PSC = 1, ARR = 35,999, CCR3 = CCR2 = 23,400 (65 %). **calc:** 2.154 V / 0.65 = 3.31 V implied rail.
+
+## Result
+
+**PB0 (TIM3_CH3) drives PWM on the genuine-core chip** with the same GPIO configuration (PB0 nibble 0xA) that gave no PWM on the two clones. Per the conclusion rule below: **clone difference confirmed.** Caveat: the genuine chip is a low-density C6, while the clones identify as medium-density C8; both have TIM3_CH3 on PB0 per their datasheets.
 
 ## Conclusion rule
 

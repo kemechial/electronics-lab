@@ -3,6 +3,9 @@
  * Constant 65 % PWM at 1 kHz, hardware PWM on two pins at once:
  *   PB0 = TIM3_CH3 (DS5319 Table 5 p.29; RM0008 Table 44 p.178, TIM3_REMAP = 00)
  *   PB6 = TIM4_CH1 (DS5319 Table 5 p.32; RM0008 Table 43 p.178, TIM4_REMAP = 0)
+ * REF_PA1 build (env exp07c_c6, low-density F103C6 without TIM4, DocID15060 pp.18-19):
+ *   PB0 = TIM3_CH3 (DocID15060 Table 5 p.27) and reference
+ *   PA1 = TIM2_CH2 (DocID15060 Table 5 p.26; RM0008 Table 45 p.179, TIM2_REMAP = 00)
  * PWM mode 1 (RM0008 p.387). Pins: alternate function push-pull, 2 MHz
  * (CNF = 10, MODE = 10, RM0008 Tables 20-21 p.161).
  * PC13 on-board LED blinks at 1 Hz as a heartbeat (PC13 sink/source limit 3 mA, DS5319 p.64).
@@ -19,8 +22,22 @@
 #define DUTY_PERCENT    65U
 #define HEARTBEAT_MS    500U        /* toggle every 500 ms = 1 Hz blink */
 
+#if defined(REF_PA1)
+#define REF_TIM             TIM2
+#define REF_TIM_CLK_ENABLE  __HAL_RCC_TIM2_CLK_ENABLE
+#define REF_CHANNEL         TIM_CHANNEL_2
+#define REF_PORT            GPIOA
+#define REF_PIN             GPIO_PIN_1
+#else
+#define REF_TIM             TIM4
+#define REF_TIM_CLK_ENABLE  __HAL_RCC_TIM4_CLK_ENABLE
+#define REF_CHANNEL         TIM_CHANNEL_1
+#define REF_PORT            GPIOB
+#define REF_PIN             GPIO_PIN_6
+#endif
+
 static TIM_HandleTypeDef htim3;
-static TIM_HandleTypeDef htim4;
+static TIM_HandleTypeDef htim_ref;
 
 static void Error_Handler(void)
 {
@@ -55,7 +72,7 @@ static void SystemClock_Config(void)
     }
 }
 
-/* TIM3/TIM4 (APB1) input clock per RM0008 p.94: equal to PCLK1 if the APB1
+/* TIM2/TIM3/TIM4 (APB1) input clock per RM0008 p.94: equal to PCLK1 if the APB1
  * prescaler is 1, otherwise twice PCLK1. */
 static uint32_t apb1_timer_clock_hz(void)
 {
@@ -97,13 +114,16 @@ static void GPIO_Init(void)
 {
     GPIO_InitTypeDef g = {0};
 
+    __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
 
-    g.Pin = GPIO_PIN_0 | GPIO_PIN_6;
+    g.Pin = GPIO_PIN_0;
     g.Mode = GPIO_MODE_AF_PP;                   /* CNF = 10, MODE = 10 (RM0008 p.161) */
     g.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &g);
+    g.Pin = REF_PIN;
+    HAL_GPIO_Init(REF_PORT, &g);
 
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);    /* active-low: off */
     g.Pin = GPIO_PIN_13;
@@ -121,9 +141,9 @@ int main(void)
     GPIO_Init();
 
     __HAL_RCC_TIM3_CLK_ENABLE();
-    __HAL_RCC_TIM4_CLK_ENABLE();
+    REF_TIM_CLK_ENABLE();
     pwm_start(&htim3, TIM3, TIM_CHANNEL_3);     /* PB0 */
-    pwm_start(&htim4, TIM4, TIM_CHANNEL_1);     /* PB6 */
+    pwm_start(&htim_ref, REF_TIM, REF_CHANNEL); /* reference: PB6 (C8) or PA1 (C6) */
 
     t_led = HAL_GetTick();
     for (;;) {
