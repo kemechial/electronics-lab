@@ -37,8 +37,8 @@ The C8 build flashed onto the C6 board crashed before the PWM started (timer reg
 
 | Chip | CPUID | DEV_ID | Pin | Measured Hz | Measured duty | DC average | GPIOB_CRL raw | State line |
 |------|-------|--------|-----|-------------|---------------|------------|---------------|------------|
-| STM32F103C6, r1p1 core (genuine per CPUID) | 0x411FC231 | 0x412 (low-density) | PB0 (TIM3_CH3) | not measured (DC meter only) | 65 % implied by DC (calc) | **2.154 V** | 0x4448444A (PB0 = 0xA) | env `exp07c_c6`, 2026-10-10; PC13 blinking; power source not recorded |
-| same | 0x411FC231 | 0x412 | PA1 (TIM2_CH2, reference) | not measured | 65 % implied (calc) | **2.154 V** | GPIOA_CRL 0x444444A4 (PA1 = 0xA) | same |
+| STM32F103C6, r1p1 core (genuine per CPUID) | 0x411FC231 | 0x412 (low-density) | PB0 (TIM3_CH3) | **1000 Hz** (meter) | **64.9 %** (meter; set 65.0 %) | **2.154 V** | 0x4448444A (PB0 = 0xA) | env `exp07c_c6`, 2026-10-10; PC13 blinking; power source not recorded |
+| same | 0x411FC231 | 0x412 | PA1 (TIM2_CH2, reference) | **1000 Hz** (meter) | **64.9 %** (meter) | **2.154 V** | GPIOA_CRL 0x444444A4 (PA1 = 0xA) | same |
 
 Reference: **clones (CPUID 0x412FC230, r2p0): no PWM on PB0 on two chips, see the [exp07a README](../exp07a-led-pattern/README.md); not re-measured here.**
 
