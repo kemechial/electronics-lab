@@ -46,12 +46,12 @@ Register check (OpenOCD, read-only): TIM3 and TIM2 counting (CR1 = 0x81), PSC = 
 
 ## Result
 
-**PB0 (TIM3_CH3) drives PWM on the genuine-core chip** with the same GPIO configuration (PB0 nibble 0xA) that gave no PWM on the two clones. Per the conclusion rule below: **clone difference confirmed.** Caveat: the genuine chip is a low-density C6, while the clones identify as medium-density C8; both have TIM3_CH3 on PB0 per their datasheets.
+TIM3_CH3 output does not reach PB0 on two r2p0 clone C8 chips (CPUID 0x412FC230, DEV_ID 0x410) but does on one r1p1 C6 chip (CPUID 0x411FC231, DEV_ID 0x412, RM0008 p.1088), with the same PB0 configuration (nibble 0xA). Both datasheets list TIM3_CH3 on PB0 (C8: DS5319 Table 5 p.29; C6: DocID15060 Table 5 p.27). **Clone difference is the most likely cause; the density difference (C6 vs C8) is a confounder; a genuine C8 would separate them.**
 
 ## Conclusion rule
 
 | Result on the genuine chip | Conclusion |
 |----------------------------|------------|
-| PB0 works (and PB6 works) | Clone difference confirmed |
+| PB0 works (and PB6 works) | Clone difference most likely (state any confounder, e.g. density) |
 | PB0 does not work, PB6 works | Clone cause eliminated: investigate firmware/circuit with the logic analyzer |
 | Neither works | Contact or loading problem: repeat |
