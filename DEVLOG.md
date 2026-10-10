@@ -98,3 +98,9 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Change:** env `exp07c_c6` (bluepill_f103c6, PA1 = TIM2_CH2 reference, `-DREF_PA1`); the C8 env keeps PB6. Release builds: C8 3,768 B flash, C6 3,736 B flash.
 - **Observation:** on an STM32F103C6 (CPUID 0x411FC231 r1p1, DEV_ID 0x412), PB0 and PA1 both read 2.154 V DC at 65 % (user, meter). TIM3/TIM2 registers as configured. The C8 build had crashed on this chip (10 KB RAM).
 - **Conclusion:** TIM3_CH3 on PB0 works on the genuine-core chip with the same pin configuration that failed on the two r2p0 clones: clone difference confirmed (caveat: C6 vs C8 density).
+
+## 2026-10-10 exp04_oled_ssd1306 stage 1: I2C scan on the Blue Pill clone
+
+- **Change:** target moved from the Black Pill to the Blue Pill clone; I2C2 on PB10/PB11 (DS5319 p.30); external 4.7 kΩ pull-ups added (module only ~40–50 kΩ). ES096 Rev 15 §2.8.7 unlock implemented; §2.8.5 ≤ 88 kHz tried; software I2C added (`I2C_BITBANG 1`).
+- **Observation:** hardware I2C2: START instead of STOP after a NACK, BUSY locks (captures data/scan_001.sr, scan_002.sr), unchanged by ES096 §2.8.7 and §2.8.5. Software I2C: `ACK 0x3C` on every scan.
+- **Conclusion:** OLED and wiring OK; hardware I2C2 on this r2p0 clone most likely differs from ST (not tested on a genuine C8). Release build 4,300 B flash (software I2C).

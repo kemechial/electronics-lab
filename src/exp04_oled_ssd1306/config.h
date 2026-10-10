@@ -16,11 +16,17 @@
 #define UART_TX_PIN         GPIO_PIN_9      /* USART1_TX -> FTDI RX (COM5), 115200 8N1 */
 
 /* --- I2C --- */
-#define I2C_SPEED_HZ        100000U         /* Stage 1: 100 kHz Sm. CCR 180, TRISE 37 at PCLK1 36 MHz (RM0008 p.781-782) */
+#define I2C_SPEED_HZ        87800U          /* <= 88 kHz per ES096 Rev 15 2.8.5 p.19: CCR = 36 MHz / (2 x 87.8 kHz) = 205 -> 87.80 kHz (RM0008 p.781) */
 #define I2C_SCAN_FIRST      0x08U
 #define I2C_SCAN_LAST       0x77U
 #define I2C_PROBE_TIMEOUT_MS 5U
 #define SCAN_PERIOD_MS      2000U           /* rescan interval, non-blocking */
+
+/* Software (bit-banged) I2C on the same pins. 1 = bit-bang, 0 = hardware I2C2.
+ * Hardware I2C2 on this r2p0 clone puts a START instead of a STOP after a NACK (see README). */
+#define I2C_BITBANG         1
+#define SW_I2C_HALF_US      5U              /* half SCL period: 5 us -> ~100 kHz */
+#define SW_I2C_STRETCH_US   1000U           /* max wait for SCL high (clock stretching) */
 
 
 #endif /* EXP04_CONFIG_H */

@@ -296,6 +296,129 @@ static void scan(uint32_t n_scan)
     tx_line();
 }
 
+/* ---------------- Software I2C (bit-banged, open-drain GPIO) ---------------- */
+
+static void dwt_init(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+static void wait_us(uint32_t us)
+{
+    const uint32_t start = DWT->CYCCNT;
+    const uint32_t cycles = us * (SystemCoreClock / 1000000U);
+
+    while (DWT->CYCCNT - start < cycles) {
+    }
+}
+
+static void sda_set(int high)
+{
+    HAL_GPIO_WritePin(I2C_PORT, I2C_SDA_PIN, high ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+/* Release SCL and wait until it is really high (slave may stretch). Returns 0 on timeout. */
+static int scl_release(void)
+{
+    uint32_t n;
+
+    HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN, GPIO_PIN_SET);
+    for (n = 0; n < SW_I2C_STRETCH_US; n++) {
+        if (HAL_GPIO_ReadPin(I2C_PORT, I2C_SCL_PIN) == GPIO_PIN_SET) {
+            return 1;
+        }
+        wait_us(1);
+    }
+    return 0;
+}
+
+static void scl_low(void)
+{
+    HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN, GPIO_PIN_RESET);
+}
+
+static void sw_i2c_init(void)
+{
+    GPIO_InitTypeDef g = {0};
+
+    HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, GPIO_PIN_SET);
+    g.Pin = I2C_SCL_PIN | I2C_SDA_PIN;
+    g.Mode = GPIO_MODE_OUTPUT_OD;               /* external pull-ups take the lines high */
+    g.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(I2C_PORT, &g);
+    dwt_init();
+}
+
+static void sw_start(void)
+{
+    sda_set(1);
+    (void)scl_release();
+    wait_us(SW_I2C_HALF_US);
+    sda_set(0);                                 /* SDA falls while SCL high = START */
+    wait_us(SW_I2C_HALF_US);
+    scl_low();
+}
+
+static void sw_stop(void)
+{
+    sda_set(0);
+    wait_us(SW_I2C_HALF_US);
+    (void)scl_release();
+    wait_us(SW_I2C_HALF_US);
+    sda_set(1);                                 /* SDA rises while SCL high = STOP */
+    wait_us(SW_I2C_HALF_US);
+}
+
+/* Send one byte MSB first; returns 1 if the slave ACKed (SDA low on the 9th clock). */
+static int sw_write_byte(uint8_t b)
+{
+    uint32_t i;
+    int ack;
+
+    for (i = 0; i < 8U; i++) {
+        sda_set((b & 0x80U) != 0U);
+        b <<= 1;
+        wait_us(SW_I2C_HALF_US);
+        (void)scl_release();
+        wait_us(SW_I2C_HALF_US);
+        scl_low();
+    }
+    sda_set(1);                                 /* release SDA for the ACK bit */
+    wait_us(SW_I2C_HALF_US);
+    (void)scl_release();
+    ack = (HAL_GPIO_ReadPin(I2C_PORT, I2C_SDA_PIN) == GPIO_PIN_RESET);
+    wait_us(SW_I2C_HALF_US);
+    scl_low();
+    return ack;
+}
+
+static void scan_sw(uint32_t n_scan)
+{
+    uint32_t addr, found = 0;
+
+    tx_str("# sw scan ");
+    tx_u32(n_scan);
+    tx_line();
+    for (addr = I2C_SCAN_FIRST; addr <= I2C_SCAN_LAST; addr++) {
+        int ack;
+
+        sw_start();
+        ack = sw_write_byte((uint8_t)(addr << 1));
+        sw_stop();
+        if (ack) {
+            tx_str("ACK ");
+            tx_hex8((uint8_t)addr);
+            tx_line();
+            found++;
+        }
+    }
+    tx_str("found=");
+    tx_u32(found);
+    tx_line();
+}
+
 int main(void)
 {
     uint32_t t_scan, n_scan = 0;
@@ -310,13 +433,25 @@ int main(void)
     tx_str(" Hz");
     tx_line();
     report_lines("idle bus");
+#if I2C_BITBANG
+    tx_str("# mode: software I2C on PB10/PB11, half period ");
+    tx_u32(SW_I2C_HALF_US);
+    tx_str(" us");
+    tx_line();
+    sw_i2c_init();
+#else
     I2C2_Init();
+#endif
 
     t_scan = HAL_GetTick() - SCAN_PERIOD_MS;    /* first scan at once */
     for (;;) {
         if (HAL_GetTick() - t_scan >= SCAN_PERIOD_MS) {
             t_scan = HAL_GetTick();
+#if I2C_BITBANG
+            scan_sw(++n_scan);
+#else
             scan(++n_scan);
+#endif
         }
     }
 }
