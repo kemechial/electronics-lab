@@ -41,6 +41,8 @@ Defined in `config.h` as a table of `{start_percent, end_percent, duration_ms}` 
 
 No other code changes: the segment count comes from `sizeof`.
 
+Build switch: `PWM_OUT` in config.h, `PWM_OUT_PB6` (default, env `exp07a_led_pattern`) or `PWM_OUT_PB0` (env `exp07a_pb0`).
+
 ## Size
 
 Release build (`pio run -e exp07a_led_pattern`, GAMMA 0): 4,660 B flash, 128 B RAM. With GAMMA 1: 4,908 B flash.
@@ -51,6 +53,9 @@ Release build (`pio run -e exp07a_led_pattern`, GAMMA 0): 4,660 B flash, 128 B R
 - **PB0 itself is fine:** exp06 drives it as a plain GPIO without problems.
 - **The chip is a clone:** the CPU reports Cortex-M3 r2p0 (CPUID 0x412FC230), while RM0008 gives r1p1 for the STM32F103 (pp.1084–1085, 1092–1093). The TIM3_CH3 → PB0 path on this clone is not covered by ST's documents; cause not determined.
 - **TIM4_CH1 on PB6 works:** the LED shows the expected fade pattern (user observation).
+- **Second board, same result (2026-10-10):** env `exp07a_pb0` (`-DPWM_OUT=PWM_OUT_PB0`, TIM3_CH3 on PB0) on another Blue Pill: the LED stays off. The CPU is the same clone type (CPUID 0x412FC230, Cortex-M3 r2p0; IDCODE 0x20030410). TIM3 is configured identically, GPIOB_CRL PB0 nibble = 0xA (AF push-pull, 2 MHz, RM0008 Tables 20–21 p.161, same as the working PB6), and PB0 never reads high (0 of 41 samples at duty > 50 %).
+- **Rejected:** pin speed / MODE bits (PB0 nibble 0xA on both boards); a single defective chip (two chips fail the same way).
+- **Open issue:** TIM3_CH3 does not reach PB0 on this clone type; per ST's documents (DS5319 p.29, RM0008 Table 44 p.178) it should. Not tested: TIM3_CH4 on PB1 or TIM3_CH1 on PA6 (all of TIM3's outputs or only CH3?), a genuine ST STM32F103, the chip marking. Use PB6/TIM4_CH1 (`PWM_OUT_PB6`, default).
 
 ## Optional later step
 

@@ -19,10 +19,24 @@
 #error "Blue Pill has an 8 MHz crystal: HSE_VALUE must be 8000000"
 #endif
 
+#if PWM_OUT == PWM_OUT_PB0
+/* TIM3_CH3 on PB0: DS5319 Table 5 p.29; RM0008 Table 44 p.178 (TIM3_REMAP = 00) */
+#define PWM_TIM             TIM3
+#define PWM_TIM_CLK_ENABLE  __HAL_RCC_TIM3_CLK_ENABLE
+#define PWM_CHANNEL         TIM_CHANNEL_3
+#define PWM_PIN             GPIO_PIN_0
+#else
+/* TIM4_CH1 on PB6: DS5319 Table 5 p.32; RM0008 Table 43 p.178 (TIM4_REMAP = 0) */
+#define PWM_TIM             TIM4
+#define PWM_TIM_CLK_ENABLE  __HAL_RCC_TIM4_CLK_ENABLE
+#define PWM_CHANNEL         TIM_CHANNEL_1
+#define PWM_PIN             GPIO_PIN_6
+#endif
+
 #define N_SEGMENTS  (sizeof(ACTIVE_PATTERN) / sizeof(ACTIVE_PATTERN[0]))
 #define LEVEL_MAX   10000U      /* brightness in 0.01 % units */
 
-static TIM_HandleTypeDef htim4;
+static TIM_HandleTypeDef htim_pwm;
 static uint32_t pwm_steps;      /* ARR + 1 = duty resolution in steps */
 
 /* Live Watch */
@@ -64,7 +78,7 @@ static void SystemClock_Config(void)
 
 /* TIM4 input clock per RM0008 p.94 (clock tree): if the APB1 prescaler is 1 the timer
  * clock equals PCLK1, otherwise it is twice PCLK1. */
-static uint32_t tim4_clock_hz(void)
+static uint32_t pwm_tim_clock_hz(void)
 {
     const uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
 
@@ -75,27 +89,27 @@ static void PWM_Init(void)
 {
     GPIO_InitTypeDef g = {0};
     TIM_OC_InitTypeDef oc = {0};
-    const uint32_t tclk = tim4_clock_hz();
+    const uint32_t tclk = pwm_tim_clock_hz();
     /* finest resolution: smallest prescaler that keeps ARR within 16 bits */
     const uint32_t psc = (tclk / PWM_HZ + 65535U) / 65536U - 1U;
 
     pwm_steps = tclk / ((psc + 1U) * PWM_HZ);   /* 72 MHz: PSC 1, 36000 steps */
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_TIM4_CLK_ENABLE();
+    PWM_TIM_CLK_ENABLE();
 
-    g.Pin = GPIO_PIN_6;
-    g.Mode = GPIO_MODE_AF_PP;                   /* TIM4_CH1, no remap needed */
+    g.Pin = PWM_PIN;
+    g.Mode = GPIO_MODE_AF_PP;                   /* timer channel, no remap needed */
     g.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &g);
 
-    htim4.Instance = TIM4;
-    htim4.Init.Prescaler = psc;
-    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim4.Init.Period = pwm_steps - 1U;
-    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-    if (HAL_TIM_PWM_Init(&htim4) != HAL_OK) {
+    htim_pwm.Instance = PWM_TIM;
+    htim_pwm.Init.Prescaler = psc;
+    htim_pwm.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim_pwm.Init.Period = pwm_steps - 1U;
+    htim_pwm.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim_pwm.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(&htim_pwm) != HAL_OK) {
         Error_Handler();
     }
 
@@ -105,10 +119,10 @@ static void PWM_Init(void)
     oc.Pulse = 0;
     oc.OCPolarity = TIM_OCPOLARITY_HIGH;
     oc.OCFastMode = TIM_OCFAST_DISABLE;
-    if (HAL_TIM_PWM_ConfigChannel(&htim4, &oc, TIM_CHANNEL_1) != HAL_OK) {
+    if (HAL_TIM_PWM_ConfigChannel(&htim_pwm, &oc, PWM_CHANNEL) != HAL_OK) {
         Error_Handler();
     }
-    if (HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1) != HAL_OK) {
+    if (HAL_TIM_PWM_Start(&htim_pwm, PWM_CHANNEL) != HAL_OK) {
         Error_Handler();
     }
 }
@@ -154,7 +168,7 @@ void pattern_tick_1ms(void)
     level = (int64_t)s->start_percent * 100 +
             ((int64_t)((int32_t)s->end_percent - (int32_t)s->start_percent) * 100 *
              (int64_t)seg_elapsed_ms) / (int64_t)s->duration_ms;
-    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, level_to_ccr((uint32_t)level));
+    __HAL_TIM_SET_COMPARE(&htim_pwm, PWM_CHANNEL, level_to_ccr((uint32_t)level));
     seg_elapsed_ms++;
 }
 

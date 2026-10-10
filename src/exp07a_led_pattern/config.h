@@ -9,6 +9,15 @@
  */
 
 #define PWM_HZ          1000U       /* PWM frequency */
+
+/* PWM output pin: PB6 = TIM4_CH1 (works on the first clone board),
+ * PB0 = TIM3_CH3 (did not drive the pin on the first clone board, see README).
+ * Env exp07a_pb0 builds the PB0 variant with -DPWM_OUT=PWM_OUT_PB0. */
+#define PWM_OUT_PB6     0
+#define PWM_OUT_PB0     1
+#ifndef PWM_OUT
+#define PWM_OUT         PWM_OUT_PB6
+#endif
 #ifndef GAMMA
 #define GAMMA           0           /* 0 = linear brightness, 1 = gamma 2.2 table */
 #endif
