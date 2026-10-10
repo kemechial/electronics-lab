@@ -419,6 +419,117 @@ static void scan_sw(uint32_t n_scan)
     tx_line();
 }
 
+/* ---------------- SSD1306 over software I2C ---------------- */
+
+static uint8_t fb[OLED_W * OLED_H / 8];        /* 1024 bytes, page-major: fb[page * 128 + x], bit = y % 8 */
+static uint32_t oled_nacks;
+
+/* One I2C write: address, control byte (0x00 commands, 0x40 data), payload. */
+static void oled_write(uint8_t control, const uint8_t *buf, uint32_t n)
+{
+    uint32_t i;
+    int ok;
+
+    sw_start();
+    ok = sw_write_byte((uint8_t)(OLED_ADDR << 1));
+    ok = sw_write_byte(control) && ok;
+    for (i = 0; i < n; i++) {
+        ok = sw_write_byte(buf[i]) && ok;
+    }
+    sw_stop();
+    if (!ok) {
+        oled_nacks++;
+    }
+}
+
+/* Init: SSD1306 app note Fig. 2 (p.64), charge pump 8Dh 14h before AFh (p.62). */
+static void oled_init(void)
+{
+    static const uint8_t cmds[] = {
+        0xAE,                   /* display off */
+        0xD5, 0x80,             /* oscillator frequency */
+        0xA8, 0x3F,             /* MUX ratio 64 */
+        0xD3, 0x00,             /* display offset 0 */
+        0x40,                   /* display start line 0 */
+        0x8D, 0x14,             /* charge pump on */
+        0x20, 0x00,             /* horizontal addressing mode */
+        OLED_SEG_REMAP,         /* segment re-map */
+        OLED_COM_SCAN,          /* COM output scan direction */
+        0xDA, OLED_COM_PINS,    /* COM pins hardware configuration */
+        0x81, 0x7F,             /* contrast */
+        0xA4,                   /* display follows RAM */
+        0xA6,                   /* normal (not inverted) */
+        0xAF,                   /* display on */
+    };
+
+    oled_write(0x00, cmds, sizeof(cmds));
+}
+
+/* Full-frame write: column 0-127, page 0-7, then 1024 data bytes in one transfer. */
+static void oled_flush(void)
+{
+    static const uint8_t window[] = {0x21, 0x00, OLED_W - 1U, 0x22, 0x00, OLED_H / 8U - 1U};
+
+    oled_write(0x00, window, sizeof(window));
+    oled_write(0x40, fb, sizeof(fb));
+}
+
+static void px(uint32_t x, uint32_t y)
+{
+    if (x < OLED_W && y < OLED_H) {
+        fb[(y / 8U) * OLED_W + x] |= (uint8_t)(1U << (y % 8U));
+    }
+}
+
+static void fill(uint8_t v)
+{
+    uint32_t i;
+
+    for (i = 0; i < sizeof(fb); i++) {
+        fb[i] = v;
+    }
+}
+
+static const char *draw_pattern(uint32_t n)
+{
+    uint32_t x, y, page;
+
+    switch (n % 5U) {
+    case 0:
+        fill(0xFF);
+        return "all on";
+    case 1:
+        fill(0x00);
+        return "all off";
+    case 2:
+        for (page = 0; page < OLED_H / 8U; page++) {
+            for (x = 0; x < OLED_W; x++) {
+                fb[page * OLED_W + x] = (((x / 8U) + page) % 2U) ? 0xFF : 0x00;
+            }
+        }
+        return "checkerboard 8x8";
+    case 3:
+        fill(0x00);
+        for (x = 0; x < OLED_W; x++) {
+            px(x, 0);
+            px(x, OLED_H - 1U);
+            px(x, (x * (OLED_H - 1U)) / (OLED_W - 1U));         /* diagonal */
+        }
+        for (y = 0; y < OLED_H; y++) {
+            px(0, y);
+            px(OLED_W - 1U, y);
+        }
+        return "border + diagonal";
+    default:
+        fill(0x00);
+        for (x = 0; x < OLED_W; x++) {
+            px(x, 15);
+            px(x, 16);
+        }
+        return "lines at rows 15 and 16";
+    }
+}
+
 int main(void)
 {
     uint32_t t_scan, n_scan = 0;
@@ -428,7 +539,7 @@ int main(void)
     UART_Init();
     __HAL_RCC_GPIOB_CLK_ENABLE();
 
-    tx_str("# exp04 stage1 I2C2 scan (Blue Pill), PCLK1=");
+    tx_str("# exp04 stage2 SSD1306 (Blue Pill), PCLK1=");
     tx_u32(HAL_RCC_GetPCLK1Freq());
     tx_str(" Hz");
     tx_line();
@@ -443,15 +554,37 @@ int main(void)
     I2C2_Init();
 #endif
 
+#if I2C_BITBANG
+    /* Stage 2: one scan, then init and test patterns, PATTERN_MS each (non-blocking timing) */
+    scan_sw(++n_scan);
+    fill(0x00);
+    oled_init();
+    oled_flush();
+    tx_str("# stage2 init done, nacks=");
+    tx_u32(oled_nacks);
+    tx_line();
+    t_scan = HAL_GetTick() - PATTERN_MS;
+    for (;;) {
+        if (HAL_GetTick() - t_scan >= PATTERN_MS) {
+            const char *name;
+
+            t_scan = HAL_GetTick();
+            name = draw_pattern(n_scan++);
+            oled_flush();
+            tx_str("pattern: ");
+            tx_str(name);
+            tx_str(" nacks=");
+            tx_u32(oled_nacks);
+            tx_line();
+        }
+    }
+#else
     t_scan = HAL_GetTick() - SCAN_PERIOD_MS;    /* first scan at once */
     for (;;) {
         if (HAL_GetTick() - t_scan >= SCAN_PERIOD_MS) {
             t_scan = HAL_GetTick();
-#if I2C_BITBANG
-            scan_sw(++n_scan);
-#else
             scan(++n_scan);
-#endif
         }
     }
+#endif
 }

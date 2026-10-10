@@ -28,5 +28,14 @@
 #define SW_I2C_HALF_US      5U              /* half SCL period: 5 us -> ~100 kHz */
 #define SW_I2C_STRETCH_US   1000U           /* max wait for SCL high (clock stretching) */
 
+/* --- SSD1306 (Stage 2) --- */
+#define OLED_ADDR           0x3CU           /* ACKed in stage 1; 0111 10 SA0 (SSD1306 p.19) */
+#define OLED_W              128U
+#define OLED_H              64U
+#define OLED_COM_PINS       0x12U           /* DAh: alternative COM config (Table 10-3 p.40-41); 0x02 if rows interleave */
+#define OLED_SEG_REMAP      0xA1U           /* A0h/A1h: column 127 -> SEG0 (assumption: module orientation) */
+#define OLED_COM_SCAN       0xC8U           /* C0h/C8h: remapped COM scan (assumption: yellow band on top) */
+#define PATTERN_MS          2000U           /* each test pattern shown for 2 s */
+
 
 #endif /* EXP04_CONFIG_H */

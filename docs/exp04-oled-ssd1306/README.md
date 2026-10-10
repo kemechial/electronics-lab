@@ -41,9 +41,12 @@ Expected address: 0111 10 SA0 → **0x3C or 0x3D** (SSD1306 p.19).
 
 On this r2p0 clone, hardware I2C2 issues a START instead of a STOP after a NACK, and BUSY locks. Software I2C on the same pins and the same OLED works. **Clone difference is the most likely cause.** Not tested: the same hardware-I2C code on a genuine ST C8, and I2C1 on this clone. Stages 2–3 use software I2C (`I2C_BITBANG 1`); the hardware path stays in the code (`I2C_BITBANG 0`).
 
-## Stage 2: init + test patterns
+## Stage 2: init + test patterns (2026-10-10)
 
-_Pending._
+- **Init:** SSD1306 app note Fig. 2 (p.64) with the charge pump `8Dh 14h` before `AFh` (p.62), horizontal addressing (`20h 00h`), full-frame writes of the 1024-byte framebuffer (window `21h 0 127`, `22h 0 7`).
+- **Choices:** DAh = **0x12** (alternative COM config, Table 10-3 pp.40–41) instead of the 02h in the p.64 example; segment remap A1h and COM scan C8h (assumption: module orientation).
+- **Patterns, 2 s each:** all on, all off, checkerboard 8×8, border + diagonal, lines at rows 15 and 16.
+- **Result:** every transfer ACKed (`nacks=0`, serial log). The user sees the test patterns as expected (qualitative); DAh 0x12 and A1h/C8h are therefore accepted. The position of rows 15/16 relative to the yellow/blue boundary was not reported.
 
 ## Stage 3: text and transfer time
 
