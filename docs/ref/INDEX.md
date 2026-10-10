@@ -12,6 +12,7 @@ The document number and revision of each local copy were read from the PDF page 
 | RM | STM32F401xB/C and STM32F401xD/E reference manual | RM0368 | Rev 6 | STMicroelectronics | `rm0368-stm32f401xbc-and-stm32f401xde-advanced-armbased-32bit-mcus-stmicroelectronics.pdf` |
 | PM | STM32 Cortex-M4 MCUs and MPUs programming manual | PM0214 | Rev 10 | STMicroelectronics | `pm0214-stm32-cortexm4-mcus-and-mpus-programming-manual-stmicroelectronics.pdf` |
 | AN2834 | How to optimize the ADC accuracy in the STM32 MCUs | AN2834 | Rev 10 | STMicroelectronics | `an2834-how-to-optimize-the-adc-accuracy-in-the-stm32-mcus-stmicroelectronics.pdf` |
+| AN4277 | How to use PWM shutdown for motor control and digital power conversion on STM32 MCUs | AN4277 | Rev 9 (February 2026) | STMicroelectronics | `an4277-how-to-use-pwm-shutdown-for-motor-control-and-digital-power-conversion-on-stm32-mcus-stmicroelectronics.pdf` |
 | AN5537 | How to use ADC oversampling techniques to improve signal-to-noise ratio on STM32 MCUs | AN5537 | Rev 2 | STMicroelectronics | `an5537-how-to-use-adc-oversampling-techniques-to-improve-signaltonoise-ratio-on-stm32-mcus-stmicroelectronics.pdf` |
 | DS-F103 | STM32F103x8/xB datasheet (medium-density) | DS5319 | Rev 20 (July 2025) | STMicroelectronics | `DS_stm32f103c8.pdf` |
 | RM0008 | STM32F101/102/103/105/107 reference manual | RM0008 | Rev 21 | STMicroelectronics | `rm0008-stm32f101xx-stm32f102xx-stm32f103xx-stm32f105xx-and-stm32f107xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf` |
@@ -32,4 +33,4 @@ How to find them:
 |------------|--------------------------|
 | exp02_dht11 | DHT pp.3–8; DS p.26 (Table 4), p.44 (Table 9); RM pp.95, 154, 333, 364, 367 |
 | exp06_transistor_led | DS5319: Table 5 p.29 (PB0 = LQFP48 pin 18, TIM3_CH3, I/O not FT), Tables 6–7 p.37 (absolute maximum, IIO ±25 mA), Table 37 p.64 (output voltage, ±8 mA, PC13–PC15 ±3 mA); RM0008 Table 44 p.178 (TIM3 remap); Q-2N2222A p.1 (pin order, limits, VCEsat), p.2 (hFE, RthJA); P2N2222A Fig. 11 as family reference for the VBE = 0.7 V assumption |
-| exp07a_led_pattern | DS5319 Table 5 p.29 (PB0 = TIM3_CH3); RM0008 p.94 (timer clock ×2 when APB prescaler ≠ 1), p.178 Table 44 (TIM3 remap), p.387 (PWM mode), p.416 (TIMx_CCMR2 OC3M/OC3PE) |
+| exp07a_led_pattern | DS5319 Table 5 p.32 (PB6 = TIM4_CH1, FT), p.29 (PB0 = TIM3_CH3, first attempt); RM0008 p.94 (timer clock ×2 when APB prescaler ≠ 1), p.178 Tables 43–44 (TIM4/TIM3 remap), p.183 (AFIO clock), p.387 (PWM mode), p.413 (TIMx_CCMR1), p.416 (TIMx_CCMR2), pp.1084–1093 (Cortex-M3 r1p1) |

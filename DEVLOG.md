@@ -84,3 +84,10 @@ The two sample buffers (2 × 800 × uint16) account for 3,200 B of the RAM.
 - **Issues:** the analyzer enumerates only on some hub ports. The 1.2 s channel check caught a read by chance, because the read period is 2 s (corrected in the README). `am230x` can't decode captures that start inside the start pulse.
 - **Step 7 (probe loading):** user-reported "not much difference" in the firmware's w0/w1 with the clips on or off; qualitative, ranges not recorded.
 - **Next step:** pull-up test with 2.2 kΩ/10 kΩ; 1 h side-by-side time series; saturated salt test.
+
+## 2026-10-10 exp07a_led_pattern: PWM moved from TIM3_CH3/PB0 to TIM4_CH1/PB6
+
+- **Observation:** with TIM3_CH3 on PB0 the LED stayed off. Over the ST-Link (OpenOCD memory reads): TIM3 configured and running, PB0 in AF push-pull, AFIO_MAPR = 0, but PB0 never read high (0 of 81 samples at duty > 50 %). PB0 works as GPIO (exp06). The CPU reports Cortex-M3 r2p0 (clone; ST F103 is r1p1, RM0008 p.1084).
+- **Change:** PWM on TIM4_CH1, PB6 (DS5319 p.32, RM0008 Table 43 p.178); the user moved the base resistor to PB6.
+- **Result:** the fade pattern works (user observation). Release build 4,660 B flash, 128 B RAM (unchanged).
+- **Open:** why TIM3_CH3 does not reach PB0 on this clone.

@@ -1,8 +1,10 @@
 /*
  * Experiment 7a: LED brightness pattern with hardware PWM, Blue Pill (STM32F103C8T6, 72 MHz).
  *
- * PWM: TIM3_CH3 on PB0 (DS5319 Table 5 p.29: PB0 default alternate function TIM3_CH3;
- *      RM0008 Table 44 p.178: TIM3_CH3 = PB0 with TIM3_REMAP = 00, the reset value).
+ * PWM: TIM4_CH1 on PB6 (DS5319 Table 5 p.32: PB6 FT, default alternate function
+ *      I2C1_SCL/TIM4_CH1; RM0008 Table 43 p.178: TIM4_CH1 = PB6 with TIM4_REMAP = 0).
+ * TIM3_CH3 on PB0 was tried first: TIM3 ran correctly but PB0 never went high on this
+ * clone (Cortex-M3 r2p0, not ST's r1p1), see the README.
  * Duty: updated every 1 ms from SysTick (stm32f1xx_it.c). No HAL_Delay, integer math only.
  * Pattern and gamma flag: config.h.
  */
@@ -20,7 +22,7 @@
 #define N_SEGMENTS  (sizeof(ACTIVE_PATTERN) / sizeof(ACTIVE_PATTERN[0]))
 #define LEVEL_MAX   10000U      /* brightness in 0.01 % units */
 
-static TIM_HandleTypeDef htim3;
+static TIM_HandleTypeDef htim4;
 static uint32_t pwm_steps;      /* ARR + 1 = duty resolution in steps */
 
 /* Live Watch */
@@ -60,9 +62,9 @@ static void SystemClock_Config(void)
     }
 }
 
-/* TIM3 input clock per RM0008 p.94 (clock tree): if the APB1 prescaler is 1 the timer
+/* TIM4 input clock per RM0008 p.94 (clock tree): if the APB1 prescaler is 1 the timer
  * clock equals PCLK1, otherwise it is twice PCLK1. */
-static uint32_t tim3_clock_hz(void)
+static uint32_t tim4_clock_hz(void)
 {
     const uint32_t pclk1 = HAL_RCC_GetPCLK1Freq();
 
@@ -73,45 +75,45 @@ static void PWM_Init(void)
 {
     GPIO_InitTypeDef g = {0};
     TIM_OC_InitTypeDef oc = {0};
-    const uint32_t tclk = tim3_clock_hz();
+    const uint32_t tclk = tim4_clock_hz();
     /* finest resolution: smallest prescaler that keeps ARR within 16 bits */
     const uint32_t psc = (tclk / PWM_HZ + 65535U) / 65536U - 1U;
 
     pwm_steps = tclk / ((psc + 1U) * PWM_HZ);   /* 72 MHz: PSC 1, 36000 steps */
 
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_TIM4_CLK_ENABLE();
 
-    g.Pin = GPIO_PIN_0;
-    g.Mode = GPIO_MODE_AF_PP;                   /* TIM3_CH3, no remap needed */
+    g.Pin = GPIO_PIN_6;
+    g.Mode = GPIO_MODE_AF_PP;                   /* TIM4_CH1, no remap needed */
     g.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &g);
 
-    htim3.Instance = TIM3;
-    htim3.Init.Prescaler = psc;
-    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-    htim3.Init.Period = pwm_steps - 1U;
-    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-    htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-    if (HAL_TIM_PWM_Init(&htim3) != HAL_OK) {
+    htim4.Instance = TIM4;
+    htim4.Init.Prescaler = psc;
+    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim4.Init.Period = pwm_steps - 1U;
+    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    if (HAL_TIM_PWM_Init(&htim4) != HAL_OK) {
         Error_Handler();
     }
 
-    /* PWM mode 1, OC3M = 110 (RM0008 p.387, TIMx_CCMR2 p.416): PB0 high while CNT < CCR3.
-     * HAL sets OC3PE, so a new CCR3 takes effect at the next update event. */
+    /* PWM mode 1, OC1M = 110 (RM0008 p.387, TIMx_CCMR1 p.413): PB6 high while CNT < CCR1.
+     * HAL sets OC1PE, so a new CCR1 takes effect at the next update event. */
     oc.OCMode = TIM_OCMODE_PWM1;
     oc.Pulse = 0;
     oc.OCPolarity = TIM_OCPOLARITY_HIGH;
     oc.OCFastMode = TIM_OCFAST_DISABLE;
-    if (HAL_TIM_PWM_ConfigChannel(&htim3, &oc, TIM_CHANNEL_3) != HAL_OK) {
+    if (HAL_TIM_PWM_ConfigChannel(&htim4, &oc, TIM_CHANNEL_1) != HAL_OK) {
         Error_Handler();
     }
-    if (HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3) != HAL_OK) {
+    if (HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1) != HAL_OK) {
         Error_Handler();
     }
 }
 
-/* Brightness level (0..LEVEL_MAX) -> CCR3 value (0..pwm_steps). */
+/* Brightness level (0..LEVEL_MAX) -> CCR1 value (0..pwm_steps). */
 static uint32_t level_to_ccr(uint32_t level)
 {
 #if GAMMA
@@ -152,7 +154,7 @@ void pattern_tick_1ms(void)
     level = (int64_t)s->start_percent * 100 +
             ((int64_t)((int32_t)s->end_percent - (int32_t)s->start_percent) * 100 *
              (int64_t)seg_elapsed_ms) / (int64_t)s->duration_ms;
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, level_to_ccr((uint32_t)level));
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, level_to_ccr((uint32_t)level));
     seg_elapsed_ms++;
 }
 
