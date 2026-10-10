@@ -21,6 +21,6 @@
 #define I2C_SCAN_LAST       0x77U
 #define I2C_PROBE_TIMEOUT_MS 5U
 #define SCAN_PERIOD_MS      2000U           /* rescan interval, non-blocking */
-#define RECOVERY_CLOCKS     9U              /* SCL pulses in bus recovery */
+
 
 #endif /* EXP04_CONFIG_H */

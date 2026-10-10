@@ -5,8 +5,8 @@
  * Clock: HSE 8 MHz x 9 = 72 MHz SYSCLK, APB1 /2 = 36 MHz = PCLK1 for I2C2.
  * I2C 100 kHz Sm: CCR = 36 MHz / (2 x 100 kHz) = 180 (RM0008 p.781-782),
  *                 TRISE = 1000 ns / 27.8 ns + 1 = 37 (RM0008 p.782); HAL computes both.
- * Bus recovery (BUSY/TIMEOUT or a line stuck low): 9 SCL pulses as GPIO, STOP, I2C re-init.
- * Every occurrence is logged. The sequence is not yet cited: ES096 (F103 errata) is not in docs/ref.
+ * BUSY lock: ES096 Rev 15 section 2.8.7 p.20 (analog filter locks BUSY; SWRST alone does not clear it).
+ * The documented 14-step unlock runs before every I2C2 init and after every BUSY/TIMEOUT; each run is logged.
  */
 #include <stdint.h>
 #include "stm32f1xx_hal.h"
@@ -156,18 +156,17 @@ static void report_lines(const char *when)
     tx_line();
 }
 
+static uint32_t errata_unlock(void);
+
 static void I2C2_Init(void)
 {
-    GPIO_InitTypeDef g = {0};
+    const uint32_t failed = errata_unlock();    /* ES096 2.8.7, ends with AF open-drain + SWRST */
 
-    g.Pin = I2C_SCL_PIN | I2C_SDA_PIN;
-    g.Mode = GPIO_MODE_AF_OD;                   /* pull-ups on the OLED module (assumption) */
-    g.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(I2C_PORT, &g);
-
-    __HAL_RCC_I2C2_CLK_ENABLE();
-    __HAL_RCC_I2C2_FORCE_RESET();               /* clear a stuck BUSY flag in the peripheral */
-    __HAL_RCC_I2C2_RELEASE_RESET();
+    if (failed) {
+        tx_str("# ES096 2.8.7 unlock before init: check failed at step ");
+        tx_u32(failed);
+        tx_line();
+    }
     hi2c2.Instance = I2C2;
     hi2c2.Init.ClockSpeed = I2C_SPEED_HZ;
     hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
@@ -190,13 +189,58 @@ static void I2C2_Init(void)
     tx_line();
 }
 
-/* Bus recovery: release a slave holding SDA low by clocking SCL 9 times as
- * open-drain GPIO, then generate a STOP (SDA low -> high while SCL high), then
- * reset and re-init I2C2. Logged with a running count. */
-static void bus_recover(const char *reason)
+/* Drive one line as open-drain GPIO to `level`, then check it in IDR (ES096 2.8.7 steps 2-11). */
+static int drive_check(uint16_t pin, GPIO_PinState level)
+{
+    uint32_t n;
+
+    HAL_GPIO_WritePin(I2C_PORT, pin, level);
+    for (n = 0; n < 1000U; n++) {
+        if (HAL_GPIO_ReadPin(I2C_PORT, pin) == level) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* ES096 Rev 15 section 2.8.7 p.20 workaround, steps 1-14. Returns the failed step, or 0. */
+static uint32_t errata_unlock(void)
 {
     GPIO_InitTypeDef g = {0};
-    uint32_t i;
+
+    __HAL_RCC_I2C2_CLK_ENABLE();
+    I2C2->CR1 &= ~I2C_CR1_PE;                                   /* 1 */
+    HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, GPIO_PIN_SET);
+    g.Pin = I2C_SCL_PIN | I2C_SDA_PIN;
+    g.Mode = GPIO_MODE_OUTPUT_OD;                               /* 2 */
+    g.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(I2C_PORT, &g);
+    if (!drive_check(I2C_SCL_PIN, GPIO_PIN_SET) || !drive_check(I2C_SDA_PIN, GPIO_PIN_SET)) {
+        return 3;                                               /* 3 */
+    }
+    if (!drive_check(I2C_SDA_PIN, GPIO_PIN_RESET)) {            /* 4 */
+        return 5;                                               /* 5 */
+    }
+    if (!drive_check(I2C_SCL_PIN, GPIO_PIN_RESET)) {            /* 6 */
+        return 7;                                               /* 7 */
+    }
+    if (!drive_check(I2C_SCL_PIN, GPIO_PIN_SET)) {              /* 8 */
+        return 9;                                               /* 9 */
+    }
+    if (!drive_check(I2C_SDA_PIN, GPIO_PIN_SET)) {              /* 10 */
+        return 11;                                              /* 11 */
+    }
+    g.Mode = GPIO_MODE_AF_OD;                                   /* 12 */
+    HAL_GPIO_Init(I2C_PORT, &g);
+    I2C2->CR1 |= I2C_CR1_SWRST;                                 /* 13 */
+    I2C2->CR1 &= ~I2C_CR1_SWRST;                                /* 14 */
+    return 0;
+}
+
+/* Logged recovery: ES096 2.8.7 unlock, then HAL re-init. */
+static void bus_recover(const char *reason)
+{
+    uint32_t failed;
 
     recoveries++;
     tx_str("# RECOVERY ");
@@ -204,27 +248,16 @@ static void bus_recover(const char *reason)
     tx_str(": ");
     tx_str(reason);
     tx_line();
-
     HAL_I2C_DeInit(&hi2c2);
-    HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, GPIO_PIN_SET);
-    g.Pin = I2C_SCL_PIN | I2C_SDA_PIN;
-    g.Mode = GPIO_MODE_OUTPUT_OD;
-    g.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(I2C_PORT, &g);
-
-    for (i = 0; i < RECOVERY_CLOCKS; i++) {
-        HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN, GPIO_PIN_RESET);
-        half_bit_wait();
-        HAL_GPIO_WritePin(I2C_PORT, I2C_SCL_PIN, GPIO_PIN_SET);
-        half_bit_wait();
+    failed = errata_unlock();
+    tx_str("# ES096 2.8.7 unlock: ");
+    if (failed) {
+        tx_str("check failed at step ");
+        tx_u32(failed);
+    } else {
+        tx_str("OK");
     }
-    /* STOP: SDA low while SCL high, then SDA high */
-    HAL_GPIO_WritePin(I2C_PORT, I2C_SDA_PIN, GPIO_PIN_RESET);
-    half_bit_wait();
-    HAL_GPIO_WritePin(I2C_PORT, I2C_SDA_PIN, GPIO_PIN_SET);
-    half_bit_wait();
-
-    report_lines("after recovery");
+    tx_line();
     I2C2_Init();
 }
 
@@ -266,7 +299,6 @@ static void scan(uint32_t n_scan)
 int main(void)
 {
     uint32_t t_scan, n_scan = 0;
-    uint8_t scl, sda;
 
     HAL_Init();
     SystemClock_Config();
@@ -278,12 +310,7 @@ int main(void)
     tx_str(" Hz");
     tx_line();
     report_lines("idle bus");
-    read_lines(&scl, &sda);
-    if (!scl || !sda) {
-        bus_recover("line low before init");
-    } else {
-        I2C2_Init();
-    }
+    I2C2_Init();
 
     t_scan = HAL_GetTick() - SCAN_PERIOD_MS;    /* first scan at once */
     for (;;) {
