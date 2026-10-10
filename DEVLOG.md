@@ -10,6 +10,7 @@ Flash/RAM after every successful release build (`pio run`). RAM = `.data` + `.bs
 | 2026-10-08 | exp02_dht11 | New experiment: DHT11 on PA6, TIM3 both-edge input capture (IRQ), derived bit threshold | 7,444 | 692 | no budget set for exp02 |
 | 2026-10-09 | exp06_transistor_led | New experiment (Blue Pill F103): PB0 2 s on/off via HAL_GetTick, PC13 in sync | 2,580 | 44 | no budget set for exp06 |
 | 2026-10-10 | exp07a_led_pattern | New experiment (Blue Pill): TIM3_CH3 PWM 1 kHz, 36,000 steps, pattern table, GAMMA off | 4,660 | 128 | no budget set for exp07a |
+| 2026-10-10 | exp07c_pwm_pin_check | New test (Blue Pill): 65 % PWM at 1 kHz on PB0 (TIM3_CH3) and PB6 (TIM4_CH1), PC13 heartbeat | 3,740 | 188 | no budget set for exp07c |
 
 ### 2026-10-07 exp01_rc_step: top 10 symbols (baseline)
 
